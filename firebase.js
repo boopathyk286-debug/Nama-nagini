@@ -1,113 +1,253 @@
-/**
- * firebase.js — Firebase Firestore integration
- * Neon Snake — Online Leaderboard
- *
- * SETUP: Replace the firebaseConfig below with your own Firebase project credentials.
- */
+# Complete Firebase Leaderboard JavaScript
 
+```javascript
+// ===============================
+// FIREBASE IMPORTS
+// ===============================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ===============================
+// FIREBASE CONFIG
+// ===============================
 const firebaseConfig = {
-  apiKey: "AIzaSyAuE95hSCbvKPG2eq3ICTanW3dPxYvsXag",
-  authDomain: "nama-game-2bb2d.firebaseapp.com",
-  projectId: "nama-game-2bb2d",
-  storageBucket: "nama-game-2bb2d.firebasestorage.app",
-  messagingSenderId: "1051522618429",
-  appId: "1:1051522618429:web:2f84101ca7abdddc948654",
-  measurementId: "G-8LZERLFEDD"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "XXXXXXXX",
+  appId: "YOUR_APP_ID"
 };
 
-// Default fallback API
-window.FirebaseAPI = {
-  submitScore: async (entry) => null,
-  fetchGlobalScores: async (count = 20) => demoScores(),
-  fetchTodayScores: async (count = 20) => demoScores(),
-  fetchTopScore: async () => 0,
-  ready: null
-};
+// ===============================
+// INITIALIZE FIREBASE
+// ===============================
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-async function initFirebase() {
-  try {
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js");
-    const { getFirestore, collection, addDoc, query, orderBy, limit, where, getDocs, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js");
-    const { getAnalytics } = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js");
-
-    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
-      const app = initializeApp(firebaseConfig);
-      try { const analytics = getAnalytics(app); } catch (e) { /* ignore analytics errors */ }
-      const db = getFirestore(app);
-      console.log("[Firebase] Connected ✓");
-
-      window.FirebaseAPI.submitScore = async (entry) => {
-        try {
-          const payload = {
-            name:       (entry.name || "ANON").toUpperCase().slice(0, 12),
-            score:      Number(entry.score)      || 0,
-            difficulty: entry.difficulty         || "easy",
-            length:     Number(entry.length)     || 0,
-            level:      Number(entry.level)      || 1,
-            ts:         serverTimestamp(),
-            dateKey:    todayKey()
-          };
-          const docRef = await addDoc(collection(db, "scores"), payload);
-          return docRef.id;
-        } catch (err) {
-          console.error("[Firebase] submitScore error:", err);
-          return null;
-        }
-      };
-
-      window.FirebaseAPI.fetchGlobalScores = async (count = 20) => {
-        try {
-          const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(count));
-          const snap = await getDocs(q);
-          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        } catch (err) {
-          console.error("[Firebase] fetchGlobalScores error:", err);
-          return demoScores();
-        }
-      };
-
-      window.FirebaseAPI.fetchTodayScores = async (count = 20) => {
-        try {
-          const q = query(collection(db, "scores"), where("dateKey", "==", todayKey()), orderBy("score", "desc"), limit(count));
-          const snap = await getDocs(q);
-          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        } catch (err) {
-          console.error("[Firebase] fetchTodayScores error:", err);
-          return demoScores();
-        }
-      };
-
-      window.FirebaseAPI.fetchTopScore = async () => {
-        try {
-          const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(1));
-          const snap = await getDocs(q);
-          if (snap.empty) return 0;
-          return snap.docs[0].data().score || 0;
-        } catch {
-          return 0;
-        }
-      };
-    } else {
-      console.warn("[Firebase] No config — running in offline/demo mode.");
-    }
-  } catch (err) {
-    console.error("[Firebase] Init error or offline:", err);
-  }
-}
-window.FirebaseAPI.ready = initFirebase();
-
+// ===============================
+// TODAY DATE KEY
+// ===============================
 function todayKey() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 }
 
-function demoScores() {
-  return [
-    { name: "VIPER",  score: 4, difficulty: "hard",   length: 42, level: 8 },
-    { name: "COBRA",  score: 3, difficulty: "hard",   length: 31, level: 6 },
-    { name: "PYTHON", score: 2, difficulty: "medium", length: 26, level: 5 },
-    { name: "ADDER",  score: 1, difficulty: "medium", length: 19, level: 4 },
-    { name: "MAMBA",  score: 1, difficulty: "easy",   length: 14, level: 3 },
-    { name: "BOA",    score:  9, difficulty: "easy",   length: 9,  level: 2 },
-  ];
+// ===============================
+// SAVE SCORE
+// ===============================
+async function saveScore(playerName, playerScore) {
+  try {
+
+    // BASIC VALIDATION
+    if (!playerName || playerName.trim() === '') {
+      alert('Enter player name');
+      return;
+    }
+
+    if (playerScore < 0) {
+      return;
+    }
+
+    // LIMIT SCORE
+    if (playerScore > 500) {
+      console.log('Fake score blocked');
+      return;
+    }
+
+    // SAVE TO FIRESTORE
+    await addDoc(collection(db, 'scores'), {
+      name: playerName.trim().substring(0, 10).toUpperCase(),
+      score: Number(playerScore),
+      dateKey: todayKey(),
+      createdAt: serverTimestamp()
+    });
+
+    console.log('Score saved successfully');
+
+    // REFRESH LEADERBOARD
+    loadLeaderboard();
+
+  } catch (error) {
+    console.error('Error saving score:', error);
+  }
 }
+
+// ===============================
+// LOAD LEADERBOARD
+// ===============================
+async function loadLeaderboard() {
+
+  try {
+
+    const leaderboardBody = document.getElementById('leaderboardBody');
+
+    if (!leaderboardBody) {
+      return;
+    }
+
+    leaderboardBody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+
+    // FIRESTORE QUERY
+    const q = query(
+      collection(db, 'scores'),
+      where('dateKey', '==', todayKey()),
+      orderBy('score', 'desc'),
+      limit(10)
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    leaderboardBody.innerHTML = '';
+
+    // NO DATA
+    if (querySnapshot.empty) {
+      leaderboardBody.innerHTML = `
+        <tr>
+          <td colspan="3">No scores today</td>
+        </tr>
+      `;
+      return;
+    }
+
+    let rank = 1;
+
+    querySnapshot.forEach((doc) => {
+
+      const data = doc.data();
+
+      const row = document.createElement('tr');
+
+      row.innerHTML = `
+        <td>#${rank}</td>
+        <td>${data.name}</td>
+        <td>${data.score}</td>
+      `;
+
+      leaderboardBody.appendChild(row);
+
+      rank++;
+    });
+
+  } catch (error) {
+
+    console.error('Leaderboard error:', error);
+
+    const leaderboardBody = document.getElementById('leaderboardBody');
+
+    if (leaderboardBody) {
+      leaderboardBody.innerHTML = `
+        <tr>
+          <td colspan="3">Leaderboard failed</td>
+        </tr>
+      `;
+    }
+  }
+}
+
+// ===============================
+// GAME OVER FUNCTION
+// ===============================
+async function gameOver(finalScore) {
+
+  const playerName = prompt('Enter Your Name');
+
+  if (!playerName) {
+    return;
+  }
+
+  await saveScore(playerName, finalScore);
+}
+
+// ===============================
+// AUTO LOAD LEADERBOARD
+// ===============================
+window.addEventListener('DOMContentLoaded', () => {
+  loadLeaderboard();
+});
+
+// ===============================
+// EXAMPLE BUTTON
+// ===============================
+const testButton = document.getElementById('testSubmit');
+
+if (testButton) {
+
+  testButton.addEventListener('click', () => {
+    saveScore('TEST', Math.floor(Math.random() * 100));
+  });
+}
+```
+
+---
+
+# HTML TABLE REQUIRED
+
+```html
+<table>
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Name</th>
+      <th>Score</th>
+    </tr>
+  </thead>
+
+  <tbody id="leaderboardBody">
+  </tbody>
+</table>
+```
+
+---
+
+# FIRESTORE RULES
+
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /scores/{document} {
+      allow read: if true;
+
+      allow create: if
+        request.resource.data.name is string &&
+        request.resource.data.score is number &&
+        request.resource.data.score <= 500;
+    }
+  }
+}
+```
+
+---
+
+# REQUIRED COMPOSITE INDEX
+
+Collection:
+
+```txt
+scores
+```
+
+Fields:
+
+```txt
+dateKey    Ascending
+score      Descending
+```
