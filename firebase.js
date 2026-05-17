@@ -99,11 +99,11 @@ function todayKey() {
 
 function demoScores() {
   return [
-    { name: "VIPER",  score: 420, difficulty: "hard",   length: 42, level: 8 },
-    { name: "COBRA",  score: 310, difficulty: "hard",   length: 31, level: 6 },
-    { name: "PYTHON", score: 260, difficulty: "medium", length: 26, level: 5 },
-    { name: "ADDER",  score: 185, difficulty: "medium", length: 19, level: 4 },
-    { name: "MAMBA",  score: 140, difficulty: "easy",   length: 14, level: 3 },
-    { name: "BOA",    score:  90, difficulty: "easy",   length: 9,  level: 2 },
+    { name: "VIPER",  score: 4, difficulty: "hard",   length: 42, level: 8 },
+    { name: "COBRA",  score: 3, difficulty: "hard",   length: 31, level: 6 },
+    { name: "PYTHON", score: 2, difficulty: "medium", length: 26, level: 5 },
+    { name: "ADDER",  score: 1, difficulty: "medium", length: 19, level: 4 },
+    { name: "MAMBA",  score: 1, difficulty: "easy",   length: 14, level: 3 },
+    { name: "BOA",    score:  9, difficulty: "easy",   length: 9,  level: 2 },
   ];
 }
