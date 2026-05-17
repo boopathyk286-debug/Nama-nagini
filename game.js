@@ -12,13 +12,6 @@
  *   App           — Bootstrap + coordination
  */
 
-import {
-  submitScore,
-  fetchGlobalScores,
-  fetchTodayScores,
-  fetchTopScore
-} from "./firebase.js";
-
 "use strict";
 
 // ═══════════════════════════════════════════════════════
@@ -383,17 +376,25 @@ const SnakeGame = (() => {
       case "RIGHT": head.x++; break;
     }
 
-    // Wall or self collision
+    // Wall collision
     if (head.x < 0 || head.x >= GRID_COLS ||
-        head.y < 0 || head.y >= GRID_ROWS ||
-        snake.some(s => s.x === head.x && s.y === head.y)) {
+        head.y < 0 || head.y >= GRID_ROWS) {
+      die();
+      return;
+    }
+
+    const ate = (head.x === food.x && head.y === food.y);
+    const collisionSnake = ate ? snake : snake.slice(0, -1);
+    
+    // Self collision
+    if (collisionSnake.some(s => s.x === head.x && s.y === head.y)) {
       die();
       return;
     }
 
     snake.unshift(head);
 
-    if (head.x === food.x && head.y === food.y) {
+    if (ate) {
       // Ate food
       score += config.pointsMultiplier;
       length++;
@@ -456,8 +457,8 @@ const LeaderboardUI = (() => {
   async function load(tab) {
     if (cache[tab]) return cache[tab];
     const data = tab === "today"
-      ? await fetchTodayScores(20)
-      : await fetchGlobalScores(20);
+      ? await window.FirebaseAPI.fetchTodayScores(20)
+      : await window.FirebaseAPI.fetchGlobalScores(20);
     cache[tab] = data;
     return data;
   }
@@ -609,13 +610,13 @@ const App = (() => {
     });
 
     // Wire navigation
-    startBtn.addEventListener("click",         () => { AudioEngine.click(); startGame(); });
-    leaderboardBtn.addEventListener("click",   () => { AudioEngine.click(); showLeaderboard("start"); });
-    restartBtn.addEventListener("click",       () => { AudioEngine.click(); startGame(); });
-    goLeaderboardBtn.addEventListener("click", () => { AudioEngine.click(); showLeaderboard("gameOver"); });
-    goHomeBtn.addEventListener("click",        () => { AudioEngine.click(); SnakeGame.stop(); UIController.show("start"); });
-    lbBackBtn.addEventListener("click",        () => { AudioEngine.click(); UIController.show(lbBackBtn._from || "start"); });
-    lbPlayBtn.addEventListener("click",        () => { AudioEngine.click(); startGame(); });
+    startBtn.addEventListener("click",         () => { AudioEngine.resume(); AudioEngine.click(); startGame(); });
+    leaderboardBtn.addEventListener("click",   () => { AudioEngine.resume(); AudioEngine.click(); showLeaderboard("start"); });
+    restartBtn.addEventListener("click",       () => { AudioEngine.resume(); AudioEngine.click(); startGame(); });
+    goLeaderboardBtn.addEventListener("click", () => { AudioEngine.resume(); AudioEngine.click(); showLeaderboard("gameOver"); });
+    goHomeBtn.addEventListener("click",        () => { AudioEngine.resume(); AudioEngine.click(); SnakeGame.stop(); UIController.show("start"); });
+    lbBackBtn.addEventListener("click",        () => { AudioEngine.resume(); AudioEngine.click(); UIController.show(lbBackBtn._from || "start"); });
+    lbPlayBtn.addEventListener("click",        () => { AudioEngine.resume(); AudioEngine.click(); startGame(); });
     submitScoreBtn.addEventListener("click",   () => submitLeaderboard());
     playerNameInput.addEventListener("keydown", e => { if (e.key === "Enter") submitLeaderboard(); });
 
@@ -624,7 +625,7 @@ const App = (() => {
 
     // Update start screen
     menuBest.textContent = LS.best || "0";
-    const topScore = await fetchTopScore();
+    const topScore = await window.FirebaseAPI.fetchTopScore();
     menuGlobal.textContent = topScore || "—";
 
     // Pre-fill name
@@ -721,7 +722,7 @@ const App = (() => {
     submitScoreBtn.textContent = "SUBMITTING…";
     submitScoreBtn.disabled = true;
 
-    await submitScore({
+    await window.FirebaseAPI.submitScore({
       name,
       score:      pendingResult.score,
       difficulty: selectedDiff,
@@ -735,7 +736,7 @@ const App = (() => {
     pendingResult = null;
 
     // Update global #1 on start screen
-    fetchTopScore().then(s => { menuGlobal.textContent = s || "—"; });
+    window.FirebaseAPI.fetchTopScore().then(s => { menuGlobal.textContent = s || "—"; });
   }
 
   // ── LEADERBOARD ──
