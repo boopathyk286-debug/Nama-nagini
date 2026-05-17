@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="description" content="Neon Snake — Online arcade leaderboard game" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NeonSnake" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <title>🐍 NEON SNAKE</title>
+</head>
+<body>
+
+  <!-- ── LOADING SCREEN ── -->
+  <div id="loadingScreen" class="screen active">
+    <div class="load-logo">
+      <span class="glyph">🐍</span>
+      <h1 class="neon-title">NEON SNAKE</h1>
+    </div>
+    <div class="load-bar-wrap"><div id="loadBar" class="load-bar"></div></div>
+    <p class="load-status" id="loadStatus">BOOTING…</p>
+  </div>
+
+  <!-- ── START SCREEN ── -->
+  <div id="startScreen" class="screen">
+    <div class="start-inner">
+      <div class="logo-area">
+        <div class="snake-logo-anim">🐍</div>
+        <h1 class="neon-title">NEON SNAKE</h1>
+        <p class="subtitle">ARCADE EDITION</p>
+      </div>
+      <div class="menu-card">
+        <div class="score-preview">
+          <div class="sp-item">
+            <span class="sp-label">BEST</span>
+            <span class="sp-val" id="menuBest">0</span>
+          </div>
+          <div class="sp-divider"></div>
+          <div class="sp-item">
+            <span class="sp-label">GLOBAL #1</span>
+            <span class="sp-val" id="menuGlobal">—</span>
+          </div>
+        </div>
+        <div class="diff-row">
+          <span class="diff-label">DIFFICULTY</span>
+          <div class="diff-btns">
+            <button class="diff-btn active" data-diff="easy">EASY</button>
+            <button class="diff-btn" data-diff="medium">MED</button>
+            <button class="diff-btn" data-diff="hard">HARD</button>
+          </div>
+        </div>
+        <button class="btn-primary" id="startBtn">▶ PLAY</button>
+        <button class="btn-secondary" id="leaderboardBtn">🏆 LEADERBOARD</button>
+      </div>
+    </div>
+    <div class="scanlines"></div>
+  </div>
+
+  <!-- ── GAME SCREEN ── -->
+  <div id="gameScreen" class="screen">
+    <div class="hud">
+      <div class="hud-item">
+        <span class="hud-label">SCORE</span>
+        <span class="hud-val" id="hudScore">0</span>
+      </div>
+      <div class="hud-item center">
+        <span class="hud-label">LEVEL</span>
+        <span class="hud-val" id="hudLevel">1</span>
+      </div>
+      <div class="hud-item right">
+        <span class="hud-label">BEST</span>
+        <span class="hud-val" id="hudBest">0</span>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="gameCanvas"></canvas>
+      <div id="countdownOverlay" class="countdown-overlay hidden">
+        <span id="countdownNum" class="countdown-num">3</span>
+      </div>
+    </div>
+    <div class="mobile-controls">
+      <div class="ctrl-row">
+        <button class="ctrl-btn" id="btnUp" aria-label="Up">▲</button>
+      </div>
+      <div class="ctrl-row">
+        <button class="ctrl-btn" id="btnLeft" aria-label="Left">◀</button>
+        <button class="ctrl-btn ghost"></button>
+        <button class="ctrl-btn" id="btnRight" aria-label="Right">▶</button>
+      </div>
+      <div class="ctrl-row">
+        <button class="ctrl-btn" id="btnDown" aria-label="Down">▼</button>
+      </div>
+    </div>
+    <div class="scanlines"></div>
+  </div>
+
+  <!-- ── GAME OVER SCREEN ── -->
+  <div id="gameOverScreen" class="screen">
+    <div class="go-inner">
+      <div class="go-header">
+        <div class="go-skull">💀</div>
+        <h2 class="go-title">GAME OVER</h2>
+      </div>
+      <div class="go-scores">
+        <div class="go-score-main">
+          <span class="go-score-label">FINAL SCORE</span>
+          <span class="go-score-val" id="goScore">0</span>
+        </div>
+        <div class="go-stats">
+          <div class="go-stat"><span>BEST</span><span id="goBest">0</span></div>
+          <div class="go-stat"><span>LENGTH</span><span id="goLength">0</span></div>
+          <div class="go-stat"><span>LEVEL</span><span id="goLevel">0</span></div>
+        </div>
+      </div>
+      <div id="newRecordBadge" class="new-record hidden">🎉 NEW RECORD!</div>
+      <div class="go-name-entry" id="nameEntry">
+        <p class="name-label">ENTER YOUR NAME FOR LEADERBOARD</p>
+        <input type="text" id="playerName" class="name-input" maxlength="12" placeholder="PLAYER_1" autocomplete="off" spellcheck="false" />
+        <button class="btn-primary" id="submitScoreBtn">SUBMIT SCORE</button>
+      </div>
+      <div class="go-actions">
+        <button class="btn-primary" id="restartBtn">▶ PLAY AGAIN</button>
+        <button class="btn-secondary" id="goLeaderboardBtn">🏆 LEADERBOARD</button>
+        <button class="btn-ghost" id="goHomeBtn">⌂ MENU</button>
+      </div>
+    </div>
+    <div class="scanlines"></div>
+  </div>
+
+  <!-- ── LEADERBOARD SCREEN ── -->
+  <div id="leaderboardScreen" class="screen">
+    <div class="lb-inner">
+      <div class="lb-header">
+        <button class="back-btn" id="lbBackBtn">← BACK</button>
+        <h2 class="lb-title">🏆 LEADERBOARD</h2>
+        <div class="lb-tabs">
+          <button class="lb-tab active" data-tab="global">GLOBAL</button>
+          <button class="lb-tab" data-tab="today">TODAY</button>
+        </div>
+      </div>
+      <div id="lbList" class="lb-list">
+        <div class="lb-loading">Loading…</div>
+      </div>
+      <button class="btn-primary lb-play-btn" id="lbPlayBtn">▶ PLAY NOW</button>
+    </div>
+    <div class="scanlines"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module" src="firebase.js"></script>
+  <!-- Game -->
+  <script type="module" src="game.js"></script>
+</body>
+</html>
