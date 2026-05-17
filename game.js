@@ -648,8 +648,12 @@ const App = (() => {
 
     // Update start screen
     menuBest.textContent = LS.best || "0";
-    const topScore = await window.FirebaseAPI.fetchTopScore();
-    menuGlobal.textContent = topScore || "—";
+    
+    // Load global top score asynchronously so it doesn't block startup
+    window.FirebaseAPI.ready.then(async () => {
+      const topScore = await window.FirebaseAPI.fetchTopScore();
+      menuGlobal.textContent = topScore || "—";
+    });
 
     // Pre-fill name
     if (LS.name) playerNameInput.value = LS.name;
@@ -670,9 +674,9 @@ const App = (() => {
     for (const [pct, msg] of steps) {
       loadBar.style.width = pct + "%";
       loadStatus.textContent = msg;
-      await sleep(200 + Math.random() * 200);
+      await sleep(15 + Math.random() * 20);
     }
-    await sleep(300);
+    await sleep(50);
   }
 
   // ── START GAME ──

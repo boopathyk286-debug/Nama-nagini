@@ -6,12 +6,13 @@
  */
 
 const firebaseConfig = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+  apiKey: "AIzaSyAuE95hSCbvKPG2eq3ICTanW3dPxYvsXag",
+  authDomain: "nama-game-2bb2d.firebaseapp.com",
+  projectId: "nama-game-2bb2d",
+  storageBucket: "nama-game-2bb2d.firebasestorage.app",
+  messagingSenderId: "1051522618429",
+  appId: "1:1051522618429:web:2f84101ca7abdddc948654",
+  measurementId: "G-8LZERLFEDD"
 };
 
 // Default fallback API
@@ -19,16 +20,19 @@ window.FirebaseAPI = {
   submitScore: async (entry) => null,
   fetchGlobalScores: async (count = 20) => demoScores(),
   fetchTodayScores: async (count = 20) => demoScores(),
-  fetchTopScore: async () => 0
+  fetchTopScore: async () => 0,
+  ready: null
 };
 
 async function initFirebase() {
   try {
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getFirestore, collection, addDoc, query, orderBy, limit, where, getDocs, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js");
+    const { getFirestore, collection, addDoc, query, orderBy, limit, where, getDocs, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js");
+    const { getAnalytics } = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js");
 
     if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
       const app = initializeApp(firebaseConfig);
+      try { const analytics = getAnalytics(app); } catch (e) { /* ignore analytics errors */ }
       const db = getFirestore(app);
       console.log("[Firebase] Connected ✓");
 
@@ -90,7 +94,7 @@ async function initFirebase() {
     console.error("[Firebase] Init error or offline:", err);
   }
 }
-initFirebase();
+window.FirebaseAPI.ready = initFirebase();
 
 function todayKey() {
   const d = new Date();
