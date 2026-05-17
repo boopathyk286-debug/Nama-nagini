@@ -23,8 +23,19 @@ const DIFFICULTY = {
   hard:   { interval:  90, speedIncrement: 6,  pointsMultiplier: 3 },
 };
 const GRID        = 20;        // cell size in px
-const GRID_COLS   = 20;
-const GRID_ROWS   = 20;
+let GRID_COLS = 18;
+let GRID_ROWS = 32;
+const screenW = window.innerWidth;
+if (screenW >= 1024) {
+  GRID_COLS = 21; // Desktop: 420px
+  GRID_ROWS = 37; // 740px
+} else if (screenW >= 768) {
+  GRID_COLS = 24; // Tablet: 480px
+  GRID_ROWS = 40; // 800px
+} else {
+  GRID_COLS = 18; // Mobile: 360px
+  GRID_ROWS = 32; // 640px
+}
 const LEVEL_EVERY = 5;         // food pickups per level
 
 // ═══════════════════════════════════════════════════════
@@ -83,11 +94,23 @@ const Renderer = (() => {
 
   function resize(wrapEl) {
     const rect = wrapEl.getBoundingClientRect();
-    const size = Math.min(rect.width, rect.height);
     canvas.width  = GRID_COLS * GRID;
     canvas.height = GRID_ROWS * GRID;
-    canvas.style.width  = size + "px";
-    canvas.style.height = size + "px";
+    
+    const targetRatio = GRID_COLS / GRID_ROWS;
+    const containerRatio = rect.width / rect.height;
+    
+    let renderW, renderH;
+    if (containerRatio > targetRatio) {
+      renderH = rect.height;
+      renderW = rect.height * targetRatio;
+    } else {
+      renderW = rect.width;
+      renderH = rect.width / targetRatio;
+    }
+    
+    canvas.style.width  = renderW + "px";
+    canvas.style.height = renderH + "px";
     W = canvas.width;
     H = canvas.height;
   }
