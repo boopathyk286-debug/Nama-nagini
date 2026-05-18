@@ -624,13 +624,16 @@ async function handleSubmitScore() {
   }
 }
 
+let lbPreviousScr = null;
+let lbCurrentTab = 'global';
+
 async function openLeaderboard(fromScreen) {
-  lbPreviousScr = fromScreen || 'start';
-  lbCurrentTab = 'global';
-  const tabs = document.querySelectorAll('.lb-tab');
-  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === 'global'));
-  showScreen('leaderboard');
-  await renderLeaderboard('global');
+    lbPreviousScr = fromScreen || 'start';
+    lbCurrentTab = 'global';
+    const tabs = document.querySelectorAll('.lb-tab');
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === 'global'));
+    showScreen('leaderboard');
+    await renderLeaderboard('global');
 }
 
 async function renderLeaderboard(tab) {
