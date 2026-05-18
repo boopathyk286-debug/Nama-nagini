@@ -12,17 +12,35 @@ import {
 const leaderboardRef = collection(db, "leaderboard");
 
 export async function saveScore(name, score, difficulty) {
+  console.log("💰 saveScore called with:", { name, score, difficulty });
   try {
-    await addDoc(leaderboardRef, {
+    const docData = {
       name: name || "PLAYER_1",
       score: parseInt(score) || 0,
       difficulty: difficulty || "easy",
-      created: Date.now()
-    });
-    console.log("✅ Score saved:", name, score);
+      created: Date.now(),
+      timestamp: new Date().toISOString()
+    };
+    console.log("📝 Saving doc:", docData);
+    
+    const docRef = await addDoc(leaderboardRef, docData);
+    console.log("✅ Score saved! Doc ID:", docRef.id);
     return true;
   } catch (err) {
     console.error("❌ Error saving score:", err);
+    console.error("Error code:", err.code);
+    console.error("Error message:", err.message);
+    
+    // Show specific error messages
+    if (err.code === 'permission-denied') {
+      console.error("⚠️ PERMISSION DENIED! Check Firestore rules in Firebase Console");
+      alert("Firebase permission denied. Please check Firestore rules.");
+    } else if (err.code === 'unavailable') {
+      console.error("⚠️ Firebase unavailable. Check your internet connection.");
+    } else if (err.code === 'not-found') {
+      console.error("⚠️ Database not found. Check if Firestore is enabled.");
+    }
+    
     return false;
   }
 }
