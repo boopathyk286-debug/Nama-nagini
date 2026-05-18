@@ -15,7 +15,6 @@
 <link rel="stylesheet" href="style.css"/>
 <title>🐍 நம்ம நாகினி</title>
 <style>
-  /* Prevent flash-of-unstyled-content — hide all screens until JS runs */
   .screen { display: none; }
   #loadingScreen { display: flex; }
 </style>
@@ -163,10 +162,7 @@
   </div>
 </div>
 
-<!-- Firebase SDK (v9 compat) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="firebase.js"></script>
+<script type="module" src="firebase.js"></script>
 <script type="module" src="leaderboard.js"></script>
 <script src="game.js"></script>
 </body>

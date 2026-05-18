@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════
-//  NAMA NAGINI — game.js  (complete, production-ready)
+//  NAMA NAGINI — game.js (complete, production-ready)
 //  Mobile / Tablet / Desktop optimised
 //  Leaderboard: Firebase only — no fake scores shown
 // ══════════════════════════════════════════════════════════
@@ -108,8 +108,10 @@ const SCREENS = {
 function showScreen(name) {
   Object.entries(SCREENS).forEach(([k, el]) => {
     const active = k === name;
-    el.classList.toggle('active', active);
-    el.style.display = active ? 'flex' : 'none';
+    if (el) {
+      el.classList.toggle('active', active);
+      el.style.display = active ? 'flex' : 'none';
+    }
   });
   state.screen = name;
 }
@@ -139,8 +141,8 @@ function runLoading() {
       return;
     }
     const [pct, msg] = steps[i++];
-    bar.style.width = pct + '%';
-    status.textContent = msg;
+    if (bar) bar.style.width = pct + '%';
+    if (status) status.textContent = msg;
     setTimeout(next, 300 + Math.random() * 280);
   };
   next();
@@ -148,30 +150,31 @@ function runLoading() {
 
 async function loadGlobalBest() {
   const FB = window.NaginiFirebase;
-  if (!FB || !FB.ready()) { $('menuGlobal1').textContent = '—'; return; }
+  const menuEl = $('menuGlobal1');
+  if (!menuEl) return;
+  if (!FB || !FB.ready()) { menuEl.textContent = '—'; return; }
   try {
     const best = await FB.fetchGlobalBest();
-    $('menuGlobal1').textContent = best ? best.score : '—';
+    menuEl.textContent = best ? best.score : '—';
   } catch (e) {
-    $('menuGlobal1').textContent = '—';
+    menuEl.textContent = '—';
   }
 }
 
 // ── CANVAS SIZING ─────────────────────────────────────────
 const canvas = $('gameCanvas');
-const ctx2d  = canvas.getContext('2d');
+const ctx2d  = canvas ? canvas.getContext('2d') : null;
 
 function resizeCanvas() {
+  if (!canvas || !ctx2d) return;
   const wrap = canvas.parentElement;
-
-  // Use getBoundingClientRect for accurate dimensions after CSS layout
+  if (!wrap) return;
   const rect = wrap.getBoundingClientRect();
   const availW = Math.floor(rect.width);
   const availH = Math.floor(rect.height);
 
-  if (availW <= 0 || availH <= 0) return; // layout not ready yet
+  if (availW <= 0 || availH <= 0) return;
 
-  // Fit the largest square that is a multiple of GRID
   const maxSide = Math.min(availW, availH);
   const size    = Math.floor(maxSide / GRID) * GRID;
 
@@ -185,7 +188,7 @@ function resizeCanvas() {
 
 // ── GAME INIT ─────────────────────────────────────────────
 function initGame() {
-  clearInterval(state.gameLoop);
+  if (state.gameLoop) clearInterval(state.gameLoop);
   const cfg = DIFF_CONFIG[state.diff];
   state.score          = 0;
   state.level          = 1;
@@ -218,17 +221,16 @@ function placeFood() {
   state.food = pos;
 }
 
-// ── GAME LOOP ─────────────────────────────────────────────
 function startGameLoop() {
   state.running = true;
   state.paused  = false;
-  clearInterval(state.gameLoop);
+  if (state.gameLoop) clearInterval(state.gameLoop);
   state.gameLoop = setInterval(tick, state.interval);
 }
 
 function pauseGame() {
   if (!state.running) return;
-  clearInterval(state.gameLoop);
+  if (state.gameLoop) clearInterval(state.gameLoop);
   state.running = false;
   state.paused  = true;
 }
@@ -243,7 +245,6 @@ function resumeGame() {
 function tick() {
   if (!state.running) return;
 
-  // Apply queued direction
   state.dir = { ...state.nextDir };
 
   const head = {
@@ -251,7 +252,6 @@ function tick() {
     y: (state.snake[0].y + state.dir.y + GRID) % GRID,
   };
 
-  // Self-collision check
   if (state.snake.some(s => s.x === head.x && s.y === head.y)) {
     handleGameOver();
     return;
@@ -271,12 +271,11 @@ function tick() {
     spawnParticles(head.x, head.y);
     placeFood();
 
-    // Level up every 5 food
     if (state.foodEaten % 5 === 0) {
       state.level++;
       sfxLevel();
       state.interval = Math.max(MIN_INTERVAL, state.interval - DIFF_CONFIG[state.diff].speedStep);
-      clearInterval(state.gameLoop);
+      if (state.gameLoop) clearInterval(state.gameLoop);
       state.gameLoop = setInterval(tick, state.interval);
     }
   } else {
@@ -289,8 +288,8 @@ function tick() {
   draw();
 }
 
-// ── PARTICLES ─────────────────────────────────────────────
 function spawnParticles(gx, gy) {
+  if (!canvas) return;
   const cell = canvas.width / GRID;
   const cx = gx * cell + cell / 2;
   const cy = gy * cell + cell / 2;
@@ -315,19 +314,18 @@ function updateParticles() {
     .filter(p => p.life > 0);
 }
 
-// ── DRAW ──────────────────────────────────────────────────
 const foodPulse = { t: 0 };
 
 function draw() {
+  if (!canvas || !ctx2d) return;
   const c    = ctx2d;
   const W    = canvas.width;
   const H    = canvas.height;
+  if (W === 0 || H === 0) return;
   const cell = W / GRID;
 
-  // Clear entire canvas
   c.clearRect(0, 0, W, H);
 
-  // ── PLAYABLE AREA: checkerboard so it's clearly distinct ──
   for (let row = 0; row < GRID; row++) {
     for (let col = 0; col < GRID; col++) {
       const even = (row + col) % 2 === 0;
@@ -336,7 +334,6 @@ function draw() {
     }
   }
 
-  // Grid lines
   c.strokeStyle = 'rgba(0,255,136,0.07)';
   c.lineWidth   = 0.5;
   for (let i = 0; i <= GRID; i++) {
@@ -344,7 +341,6 @@ function draw() {
     c.beginPath(); c.moveTo(0, i * cell);   c.lineTo(W, i * cell); c.stroke();
   }
 
-  // Neon border around playable area
   c.save();
   c.strokeStyle = 'rgba(0,255,136,0.5)';
   c.lineWidth   = 2.5;
@@ -352,30 +348,23 @@ function draw() {
   c.shadowBlur  = 16;
   c.strokeRect(1.5, 1.5, W - 3, H - 3);
 
-  // Corner accent brackets
   const ca = cell * 1.2;
   c.strokeStyle = '#00ff88';
   c.lineWidth   = 3.5;
   c.shadowBlur  = 22;
-  // Top-left
   c.beginPath(); c.moveTo(0, ca); c.lineTo(0, 0); c.lineTo(ca, 0); c.stroke();
-  // Top-right
   c.beginPath(); c.moveTo(W - ca, 0); c.lineTo(W, 0); c.lineTo(W, ca); c.stroke();
-  // Bottom-left
   c.beginPath(); c.moveTo(0, H - ca); c.lineTo(0, H); c.lineTo(ca, H); c.stroke();
-  // Bottom-right
   c.beginPath(); c.moveTo(W - ca, H); c.lineTo(W, H); c.lineTo(W, H - ca); c.stroke();
   c.shadowBlur = 0;
   c.restore();
 
-  // Food
   if (state.food) {
     foodPulse.t = (foodPulse.t + 0.08) % (Math.PI * 2);
     const scale = 0.36 + 0.06 * Math.sin(foodPulse.t);
     const fx = state.food.x * cell + cell / 2;
     const fy = state.food.y * cell + cell / 2;
 
-    // Outer glow ring
     const grad = c.createRadialGradient(fx, fy, 0, fx, fy, cell * 0.7);
     grad.addColorStop(0, 'rgba(255,45,120,0.35)');
     grad.addColorStop(1, 'rgba(255,45,120,0)');
@@ -384,7 +373,6 @@ function draw() {
     c.arc(fx, fy, cell * 0.7, 0, Math.PI * 2);
     c.fill();
 
-    // Apple body
     c.shadowColor = '#ff2d78';
     c.shadowBlur  = 14;
     c.fillStyle   = '#ff2d78';
@@ -393,14 +381,12 @@ function draw() {
     c.fill();
     c.shadowBlur = 0;
 
-    // Highlight
     c.fillStyle = 'rgba(255,255,255,0.3)';
     c.beginPath();
     c.arc(fx - cell * 0.09, fy - cell * 0.09, cell * 0.1, 0, Math.PI * 2);
     c.fill();
   }
 
-  // Snake
   state.snake.forEach((seg, i) => {
     const px   = seg.x * cell;
     const py   = seg.y * cell;
@@ -408,14 +394,13 @@ function draw() {
     const size = cell - pad * 2;
     const r    = size * (i === 0 ? 0.44 : 0.38);
 
-    // Colour — gradient head (bright) to tail (darker)
-    const ratio = i / Math.max(state.snake.length - 1, 1);
     if (i === 0) {
       c.shadowColor = '#00ff88';
       c.shadowBlur  = 14;
       c.fillStyle   = '#00ff88';
     } else {
       c.shadowBlur  = 0;
+      const ratio = i / Math.max(state.snake.length - 1, 1);
       const g = Math.round(200 - ratio * 100);
       const b = Math.round(80  - ratio * 70);
       c.fillStyle = `rgb(0,${g},${b})`;
@@ -425,7 +410,6 @@ function draw() {
     c.fill();
     c.shadowBlur = 0;
 
-    // Inner sheen on head
     if (i === 0) {
       c.fillStyle = 'rgba(255,255,255,0.12)';
       drawRoundRect(c, px + pad + 2, py + pad + 2, size * 0.5, size * 0.35, r * 0.5);
@@ -434,7 +418,6 @@ function draw() {
     }
   });
 
-  // Particles
   state.particles.forEach(p => {
     c.globalAlpha = p.life;
     c.fillStyle   = p.color;
@@ -444,7 +427,6 @@ function draw() {
   });
   c.globalAlpha = 1;
 
-  // Paused overlay
   if (state.paused) {
     c.fillStyle = 'rgba(0,0,0,0.55)';
     c.fillRect(0, 0, W, H);
@@ -506,17 +488,22 @@ function drawEyes(c, seg, cell) {
   });
 }
 
-// ── HUD ───────────────────────────────────────────────────
 function updateHUD() {
-  $('hudScore').textContent = state.score;
-  $('hudLevel').textContent = state.level;
-  $('hudBest').textContent  = state.best;
+  const scoreEl = $('hudScore');
+  const levelEl = $('hudLevel');
+  const bestEl = $('hudBest');
+  if (scoreEl) scoreEl.textContent = state.score;
+  if (levelEl) levelEl.textContent = state.level;
+  if (bestEl) bestEl.textContent = state.best;
 }
 
-// ── COUNTDOWN ─────────────────────────────────────────────
 function startCountdown(onDone) {
   const overlay  = $('countdownOverlay');
   const numEl    = $('countdownNum');
+  if (!overlay || !numEl) {
+    onDone();
+    return;
+  }
   let count = 3;
 
   overlay.classList.remove('hidden');
@@ -531,7 +518,6 @@ function startCountdown(onDone) {
       onDone();
     } else {
       numEl.textContent = count;
-      // Restart animation
       numEl.style.animation = 'none';
       numEl.offsetHeight;
       numEl.style.animation = 'pop 0.4s ease-out';
@@ -540,92 +526,104 @@ function startCountdown(onDone) {
   }, 950);
 }
 
-// ── GAME OVER ─────────────────────────────────────────────
 function handleGameOver() {
-  clearInterval(state.gameLoop);
+  if (state.gameLoop) clearInterval(state.gameLoop);
   state.running = false;
   state.paused  = false;
   sfxDie();
 
-  // Persist local best
   const saved = parseInt(localStorage.getItem('nagini_best') || '0', 10);
   if (state.score > saved) localStorage.setItem('nagini_best', String(state.score));
   if (state.score > state.best) state.best = state.score;
 
-  // Red flash
-  canvas.style.transition = 'none';
-  canvas.style.boxShadow  = '0 0 0 4px #ff2d78, 0 0 40px #ff2d78';
-  setTimeout(() => { canvas.style.boxShadow = ''; canvas.style.transition = ''; }, 500);
+  if (canvas) {
+    canvas.style.transition = 'none';
+    canvas.style.boxShadow  = '0 0 0 4px #ff2d78, 0 0 40px #ff2d78';
+    setTimeout(() => { if (canvas) { canvas.style.boxShadow = ''; canvas.style.transition = ''; } }, 500);
+  }
 
-  // Random Tamil quote
-  $('tamilQuote').textContent = TAMIL_QUOTES[Math.floor(Math.random() * TAMIL_QUOTES.length)];
+  const quoteEl = $('tamilQuote');
+  if (quoteEl) quoteEl.textContent = TAMIL_QUOTES[Math.floor(Math.random() * TAMIL_QUOTES.length)];
 
-  // Scores
-  $('goScore').textContent  = state.score;
-  $('goBest').textContent   = state.best;
-  $('goLength').textContent = state.snake.length;
-  $('goLevel').textContent  = state.level;
+  const goScoreEl = $('goScore');
+  const goBestEl = $('goBest');
+  const goLengthEl = $('goLength');
+  const goLevelEl = $('goLevel');
+  if (goScoreEl) goScoreEl.textContent = state.score;
+  if (goBestEl) goBestEl.textContent = state.best;
+  if (goLengthEl) goLengthEl.textContent = state.snake.length;
+  if (goLevelEl) goLevelEl.textContent = state.level;
 
-  // New record badge — only if beaten a real score
   const prevBest = parseInt(localStorage.getItem('nagini_best') || '0', 10);
   const isNewRecord = state.score > 0 && state.score >= prevBest && state.snake.length > 3;
-  $('newRecordBadge').classList.toggle('hidden', !isNewRecord);
+  const newRecordBadge = $('newRecordBadge');
+  if (newRecordBadge) newRecordBadge.classList.toggle('hidden', !isNewRecord);
 
-  // Name entry: only show if Firebase ready and scored something
-  const FB   = window.NaginiFirebase;
+  const FB = window.NaginiFirebase;
   const showEntry = FB && FB.ready() && state.score > 0 && !state.scoreSubmitted;
-  $('nameEntry').style.display = showEntry ? 'flex' : 'none';
+  const nameEntry = $('nameEntry');
+  if (nameEntry) nameEntry.style.display = showEntry ? 'flex' : 'none';
   if (showEntry) {
-    $('playerName').value = '';
-    $('submitScoreBtn').textContent = '📤 SUBMIT SCORE';
-    $('submitScoreBtn').disabled    = false;
-    setTimeout(() => $('playerName').focus(), 400);
+    const playerName = $('playerName');
+    const submitBtn = $('submitScoreBtn');
+    if (playerName) playerName.value = '';
+    if (submitBtn) {
+      submitBtn.textContent = '📤 SUBMIT SCORE';
+      submitBtn.disabled = false;
+    }
+    setTimeout(() => { if (playerName) playerName.focus(); }, 400);
   }
 
   showScreen('gameover');
 }
 
-// ── SCORE SUBMIT ──────────────────────────────────────────
 async function handleSubmitScore() {
   if (state.scoreSubmitted) return;
-  const name = ($('playerName').value || '').trim() || 'PLAYER_1';
-  const btn  = $('submitScoreBtn');
-  btn.textContent = '⏳ SUBMITTING…';
-  btn.disabled    = true;
+  const nameInput = $('playerName');
+  const name = (nameInput ? nameInput.value : '').trim() || 'PLAYER_1';
+  const btn = $('submitScoreBtn');
+  if (btn) {
+    btn.textContent = '⏳ SUBMITTING…';
+    btn.disabled = true;
+  }
 
   const FB = window.NaginiFirebase;
   if (!FB || !FB.ready()) {
-    btn.textContent = '❌ FIREBASE NOT CONFIGURED';
+    if (btn) btn.textContent = '❌ FIREBASE NOT CONFIGURED';
     return;
   }
 
   const ok = await FB.submitScore(name, state.score, state.diff);
   state.scoreSubmitted = true;
   if (ok) {
-    btn.textContent = '✅ SCORE SAVED!';
-    $('nameEntry').style.display = 'none';
-    loadGlobalBest(); // refresh #1 on start screen
+    if (btn) btn.textContent = '✅ SCORE SAVED!';
+    const nameEntry = $('nameEntry');
+    if (nameEntry) nameEntry.style.display = 'none';
+    loadGlobalBest();
   } else {
-    btn.textContent = '❌ ERROR — TRY AGAIN';
-    btn.disabled    = false;
+    if (btn) {
+      btn.textContent = '❌ ERROR — TRY AGAIN';
+      btn.disabled = false;
+    }
     state.scoreSubmitted = false;
   }
 }
 
-// ── LEADERBOARD ───────────────────────────────────────────
-let lbCurrentTab   = 'global';
-let lbPreviousScr  = 'start';
+let lbCurrentTab = 'global';
+let lbPreviousScr = 'start';
 
 async function openLeaderboard(fromScreen) {
   lbPreviousScr = fromScreen || 'start';
-  lbCurrentTab  = 'global';
-  document.querySelectorAll('.lb-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'global'));
+  lbCurrentTab = 'global';
+  const tabs = document.querySelectorAll('.lb-tab');
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === 'global'));
   showScreen('leaderboard');
   await renderLeaderboard('global');
 }
 
 async function renderLeaderboard(tab) {
   const list = $('lbList');
+  if (!list) return;
   list.innerHTML = '<div class="lb-loading">LOADING… 🐍</div>';
 
   const FB = window.NaginiFirebase;
@@ -659,24 +657,28 @@ async function renderLeaderboard(tab) {
     list.innerHTML = scores.map((entry, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
       const rankCls = i < 3 ? `lb-rank-${i + 1}` : 'lb-rank-n';
-      const diff    = entry.difficulty || 'easy';
+      const diff = entry.difficulty || 'easy';
       return `
         <div class="lb-row">
           <span class="lb-rank ${rankCls}">${medal}</span>
-          <span class="lb-name">${escHtml(entry.name || 'UNKNOWN')}</span>
+          <span class="lb-name">${escapeHtml(entry.name || 'UNKNOWN')}</span>
           <span class="lb-diff-badge lb-diff-${diff}">${diff.toUpperCase()}</span>
           <span class="lb-score">${Number(entry.score).toLocaleString()}</span>
         </div>`;
     }).join('');
   } catch (e) {
+    console.error("Render error:", e);
     list.innerHTML = `<div class="lb-empty"><p>⚠️ Error loading scores. Please try again!</p></div>`;
   }
 }
 
-function escHtml(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-  );
+function escapeHtml(str) {
+  return String(str).replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
 }
 
 // ── INPUT: KEYBOARD ───────────────────────────────────────
@@ -696,7 +698,6 @@ const DIR_VEC = {
 function trySetDir(d) {
   const nd = DIR_VEC[d];
   if (!nd) return;
-  // Prevent 180-degree reversal
   if (nd.x === -state.dir.x && nd.y === -state.dir.y) return;
   state.nextDir = nd;
 }
@@ -707,7 +708,7 @@ document.addEventListener('keydown', e => {
   if (d) { e.preventDefault(); trySetDir(d); return; }
   if (e.key === ' ' || e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
     e.preventDefault();
-    if (state.running)     pauseGame();
+    if (state.running) pauseGame();
     else if (state.paused) resumeGame();
   }
 });
@@ -715,39 +716,44 @@ document.addEventListener('keydown', e => {
 // ── INPUT: D-PAD BUTTONS ──────────────────────────────────
 ['Up', 'Down', 'Left', 'Right'].forEach(dir => {
   const btn = $('btn' + dir);
-  if (!btn) return;
-  btn.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    trySetDir(dir.toLowerCase());
-  });
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      trySetDir(dir.toLowerCase());
+    });
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      trySetDir(dir.toLowerCase());
+    });
+  }
 });
 
 // ── INPUT: TOUCH SWIPE ON CANVAS ─────────────────────────
 let touchStart = null;
 
-canvas.addEventListener('touchstart', e => {
-  if (state.screen !== 'game') return;
-  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-}, { passive: true });
+if (canvas) {
+  canvas.addEventListener('touchstart', e => {
+    if (state.screen !== 'game') return;
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
 
-canvas.addEventListener('touchend', e => {
-  if (state.screen !== 'game' || !touchStart) return;
-  const dx   = e.changedTouches[0].clientX - touchStart.x;
-  const dy   = e.changedTouches[0].clientY - touchStart.y;
-  const adx  = Math.abs(dx);
-  const ady  = Math.abs(dy);
-  touchStart = null;
-  if (Math.max(adx, ady) < 18) {
-    // Tap — pause/resume
-    if (state.running) pauseGame();
-    else if (state.paused) resumeGame();
-    return;
-  }
-  if (adx > ady) trySetDir(dx > 0 ? 'right' : 'left');
-  else           trySetDir(dy > 0 ? 'down'  : 'up');
-}, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    if (state.screen !== 'game' || !touchStart) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    touchStart = null;
+    if (Math.max(adx, ady) < 18) {
+      if (state.running) pauseGame();
+      else if (state.paused) resumeGame();
+      return;
+    }
+    if (adx > ady) trySetDir(dx > 0 ? 'right' : 'left');
+    else trySetDir(dy > 0 ? 'down' : 'up');
+  }, { passive: true });
+}
 
-// Prevent rubber-band scroll when playing
 document.addEventListener('touchmove', e => {
   if (state.screen === 'game') e.preventDefault();
 }, { passive: false });
@@ -756,7 +762,6 @@ document.addEventListener('touchmove', e => {
 function startNewGame() {
   initGame();
   showScreen('game');
-  // Wait one frame for CSS layout to settle before measuring
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       resizeCanvas();
@@ -765,46 +770,65 @@ function startNewGame() {
   });
 }
 
-$('startBtn').addEventListener('click', startNewGame);
-$('restartBtn').addEventListener('click', startNewGame);
-$('lbPlayBtn').addEventListener('click', startNewGame);
+const startBtn = $('startBtn');
+if (startBtn) startBtn.addEventListener('click', startNewGame);
 
-$('leaderboardBtn').addEventListener('click',   () => openLeaderboard('start'));
-$('goLeaderboardBtn').addEventListener('click', () => openLeaderboard('gameover'));
+const restartBtn = $('restartBtn');
+if (restartBtn) restartBtn.addEventListener('click', startNewGame);
 
-$('goHomeBtn').addEventListener('click', () => {
-  clearInterval(state.gameLoop);
-  state.running = false;
-  state.paused  = false;
-  loadGlobalBest();
-  showScreen('start');
-});
+const lbPlayBtn = $('lbPlayBtn');
+if (lbPlayBtn) lbPlayBtn.addEventListener('click', startNewGame);
 
-$('lbBackBtn').addEventListener('click', () => showScreen(lbPreviousScr));
+const leaderboardBtn = $('leaderboardBtn');
+if (leaderboardBtn) leaderboardBtn.addEventListener('click', () => openLeaderboard('start'));
 
-$('submitScoreBtn').addEventListener('click', handleSubmitScore);
-$('playerName').addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmitScore(); });
+const goLeaderboardBtn = $('goLeaderboardBtn');
+if (goLeaderboardBtn) goLeaderboardBtn.addEventListener('click', () => openLeaderboard('gameover'));
+
+const goHomeBtn = $('goHomeBtn');
+if (goHomeBtn) {
+  goHomeBtn.addEventListener('click', () => {
+    if (state.gameLoop) clearInterval(state.gameLoop);
+    state.running = false;
+    state.paused = false;
+    loadGlobalBest();
+    showScreen('start');
+  });
+}
+
+const lbBackBtn = $('lbBackBtn');
+if (lbBackBtn) lbBackBtn.addEventListener('click', () => showScreen(lbPreviousScr));
+
+const submitScoreBtn = $('submitScoreBtn');
+if (submitScoreBtn) submitScoreBtn.addEventListener('click', handleSubmitScore);
+
+const playerNameInput = $('playerName');
+if (playerNameInput) {
+  playerNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmitScore(); });
+}
 
 // Difficulty buttons
-document.querySelectorAll('.diff-btn').forEach(btn => {
+const diffBtns = document.querySelectorAll('.diff-btn');
+diffBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    diffBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     state.diff = btn.dataset.diff;
   });
 });
 
 // Leaderboard tabs
-document.querySelectorAll('.lb-tab').forEach(tab => {
+const lbTabs = document.querySelectorAll('.lb-tab');
+lbTabs.forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+    lbTabs.forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     lbCurrentTab = tab.dataset.tab;
     renderLeaderboard(lbCurrentTab);
   });
 });
 
-// Resize — debounced with rAF
+// Resize handler
 let resizeRaf = null;
 window.addEventListener('resize', () => {
   if (state.screen !== 'game') return;
@@ -815,9 +839,6 @@ window.addEventListener('resize', () => {
 });
 
 // ── BOOT ──────────────────────────────────────────────────
-// Restore local best
 state.best = parseInt(localStorage.getItem('nagini_best') || '0', 10);
-
-// Boot sequence
 showScreen('loading');
 runLoading();
