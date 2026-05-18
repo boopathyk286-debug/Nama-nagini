@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAuE95hSCbvKPG2eq3ICTanW3dPxYvsXag",
@@ -11,8 +11,33 @@ const firebaseConfig = {
   measurementId: "G-8LZERLFEDD"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const leaderboardRef = collection(db, "leaderboard");
+
+// Test Firebase connection
+console.log("🔥 Firebase initializing...");
+console.log("Project ID:", firebaseConfig.projectId);
+
+// Direct test function
+async function testFirebaseConnection() {
+  try {
+    console.log("Testing Firebase connection...");
+    const testDoc = await addDoc(leaderboardRef, {
+      name: "TEST",
+      score: 999,
+      difficulty: "easy",
+      created: Date.now()
+    });
+    console.log("✅ Firebase WORKING! Test doc ID:", testDoc.id);
+    return true;
+  } catch (err) {
+    console.error("❌ Firebase FAILED:", err);
+    console.error("Error details:", err.message);
+    return false;
+  }
+}
 
 let leaderboardAPI = null;
 
@@ -27,10 +52,15 @@ async function getLeaderboard() {
 window.NaginiFirebase = {
   ready: () => true,
   
+  testConnection: testFirebaseConnection,
+  
   submitScore: async (name, score, difficulty) => {
+    console.log("📤 Submitting score:", { name, score, difficulty });
     try {
       const { saveScore } = await getLeaderboard();
-      return await saveScore(name, score, difficulty);
+      const result = await saveScore(name, score, difficulty);
+      console.log("Submit result:", result);
+      return result;
     } catch (e) {
       console.error("Submit score error:", e);
       return false;
@@ -68,4 +98,9 @@ window.NaginiFirebase = {
   }
 };
 
-export { db };
+// Run test on load
+setTimeout(() => {
+  testFirebaseConnection();
+}, 2000);
+
+export { db, leaderboardRef };
