@@ -1,792 +1,823 @@
-/**
- * game.js — Neon Snake Game Engine
- * Modular, scalable, production-ready
- *
- * Modules:
- *   AudioEngine   — Web Audio API sound effects
- *   Renderer      — Canvas 2D drawing
- *   InputManager  — Keyboard + touch/swipe + D-pad
- *   SnakeGame     — Core game logic + difficulty
- *   UIController  — Screen transitions + HUD
- *   LeaderboardUI — Leaderboard rendering
- *   App           — Bootstrap + coordination
- */
+// ══════════════════════════════════════════════════════════
+//  NAMA NAGINI — game.js  (complete, production-ready)
+//  Mobile / Tablet / Desktop optimised
+//  Leaderboard: Firebase only — no fake scores shown
+// ══════════════════════════════════════════════════════════
 
-"use strict";
+'use strict';
 
-// ═══════════════════════════════════════════════════════
-//  CONFIG
-// ═══════════════════════════════════════════════════════
-const DIFFICULTY = {
-  easy:   { interval: 180, speedIncrement: 4,  pointsMultiplier: 1 },
-  medium: { interval: 130, speedIncrement: 5,  pointsMultiplier: 2 },
-  hard:   { interval:  90, speedIncrement: 6,  pointsMultiplier: 3 },
+// ── TAMIL GAME-OVER QUOTES ────────────────────────────────
+const TAMIL_QUOTES = [
+  "ஐயோ! பாம்பு சாகிட்டே! 😭",
+  "என்ன ஒரு கஷ்டம்! சாப்பிட போய் சாஞ்சுட்டே! 🍎💀",
+  "அம்மா! நாம நாகினி போயிட்டா! 😱",
+  "டேய்! கண்ணு மூடிட்டியா? வழி தெரியலையா? 🤦",
+  "Snake-உ wall-அ மடிக்கும்னு நினைச்சியா? 😂",
+  "Game over? இல்ல இல்ல… இதுவே life! 🎭",
+  "பாம்பே உன்னையே கடிச்சுக்கிட்டே! 🐍😵",
+  "நீ நாகரீகமா விளையாடியிருக்கணும்! 😤",
+  "Thala-வுக்கு ஒரு respect! நீ ஒரு நிமிஷம் கூட வாழல! 🕐",
+  "இவ்வளவு சாப்பிட்டு இப்படி மடிஞ்சியா? 🍕💀",
+  "கோடி ரூபா பணம் வெச்சாலும் wall bypass ஆகாது! 😂",
+  "Wall-ஓட friendship பண்ண போனியா? 🧱❤️",
+  "Semma effort! ஆனா result? பஜ்ஜி! 🤷",
+  "100 score கூட வரலையா? Seriously? 😑",
+  "மீண்டும் முயற்சி செய் — விடாமுயற்சியே வெற்றி! 💪",
+  "Auto-வே போகல, game-உம் போச்சு! 🚗💨",
+  "இது skill issue தான்! 😂",
+  "ஒரு வழியா game over ஆயிருச்சு, ஆனா life over இல்ல! 😅",
+  "உன் high score-ஐ பாரு — அழுகை வருதா? 😭",
+  "Next time hard mode try பண்ணு — jokes! Easy-யே போதும்! 😂",
+  "யாரு சொன்னா நீ ஆட தெரியும்னு? 😂",
+  "Snake கூட உன்னை விட smart-ஆ இருக்கு! 🐍💡",
+  "இன்னொரு முறை ஆடு — lucky feel வருது! 🍀",
+  "Chance-ஐ miss பண்ணிட்டே, life போல! 😔",
+  "உன் snake-க்கு GPS வேணும் போல! 🗺️",
+];
+
+// ── DIFFICULTY ────────────────────────────────────────────
+const DIFF_CONFIG = {
+  easy:   { startInterval: 180, speedStep: 4,  pointMult: 1 },
+  medium: { startInterval: 130, speedStep: 5,  pointMult: 2 },
+  hard:   { startInterval:  85, speedStep: 7,  pointMult: 3 },
 };
-const GRID        = 20;        // cell size in px
-let GRID_COLS = 18;
-let GRID_ROWS = 32;
-const screenW = window.innerWidth;
-if (screenW >= 1024) {
-  GRID_COLS = 21; // Desktop: 420px
-  GRID_ROWS = 37; // 740px
-} else if (screenW >= 768) {
-  GRID_COLS = 24; // Tablet: 480px
-  GRID_ROWS = 40; // 800px
-} else {
-  GRID_COLS = 18; // Mobile: 360px
-  GRID_ROWS = 32; // 640px
+const MIN_INTERVAL = 48;
+const GRID = 20;
+
+// ── GAME STATE ────────────────────────────────────────────
+const state = {
+  screen:         'loading',
+  diff:           'easy',
+  score:          0,
+  best:           0,
+  level:          1,
+  snake:          [],
+  dir:            { x: 1, y: 0 },
+  nextDir:        { x: 1, y: 0 },
+  food:           null,
+  particles:      [],
+  gameLoop:       null,
+  interval:       180,
+  foodEaten:      0,
+  running:        false,
+  paused:         false,
+  scoreSubmitted: false,
+};
+
+// ── AUDIO ENGINE ──────────────────────────────────────────
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  return audioCtx;
 }
-const LEVEL_EVERY = 5;         // food pickups per level
+function beep(freq, dur, type = 'square', vol = 0.12) {
+  const ctx = getAudio();
+  if (!ctx) return;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = type;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.start();
+    osc.stop(ctx.currentTime + dur);
+  } catch (e) {}
+}
+function sfxEat()   { beep(440, 0.07, 'square', 0.14); setTimeout(() => beep(660, 0.07, 'square', 0.11), 55); }
+function sfxDie()   { beep(220, 0.12, 'sawtooth', 0.18); setTimeout(() => beep(110, 0.28, 'sawtooth', 0.14), 90); }
+function sfxLevel() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.09, 'square', 0.11), i * 75)); }
+function sfxTick()  { beep(180, 0.018, 'sine', 0.035); }
+function sfxCount() { beep(880, 0.07, 'square', 0.09); }
 
-// ═══════════════════════════════════════════════════════
-//  AUDIO ENGINE
-// ═══════════════════════════════════════════════════════
-const AudioEngine = (() => {
-  let ctx = null;
-  let muted = false;
+// ── DOM HELPERS ───────────────────────────────────────────
+const $ = id => document.getElementById(id);
 
-  function init() {
-    try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch { /* AudioContext not supported */ }
-  }
+const SCREENS = {
+  loading:     $('loadingScreen'),
+  start:       $('startScreen'),
+  game:        $('gameScreen'),
+  gameover:    $('gameOverScreen'),
+  leaderboard: $('leaderboardScreen'),
+};
 
-  function resume() {
-    if (ctx && ctx.state === "suspended") ctx.resume();
-  }
+function showScreen(name) {
+  Object.entries(SCREENS).forEach(([k, el]) => {
+    const active = k === name;
+    el.classList.toggle('active', active);
+    el.style.display = active ? 'flex' : 'none';
+  });
+  state.screen = name;
+}
 
-  function beep({ freq = 440, type = "square", duration = 0.08, vol = 0.15, decay = 0.1 } = {}) {
-    if (muted || !ctx) return;
-    try {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(vol, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration + decay);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + duration + decay + 0.05);
-    } catch { /* ignore */ }
-  }
+// ── LOADING ───────────────────────────────────────────────
+function runLoading() {
+  const bar    = $('loadBar');
+  const status = $('loadStatus');
 
-  const eat   = () => { beep({ freq: 523, type: "square", duration: 0.05, vol: 0.2 });
-                        setTimeout(() => beep({ freq: 659, type: "square", duration: 0.05, vol: 0.15 }), 60); };
-  const die   = () => { beep({ freq: 220, type: "sawtooth", duration: 0.3, vol: 0.25, decay: 0.4 }); };
-  const levelUp = () => {
-    [523, 659, 784, 1047].forEach((f, i) =>
-      setTimeout(() => beep({ freq: f, type: "square", duration: 0.07, vol: 0.15 }), i * 80));
+  const steps = [
+    [8,   'BOOTING SYSTEM…'],
+    [22,  'WAKING THE SNAKE… 🐍'],
+    [40,  'FEEDING NAGINI… 🍎'],
+    [60,  'CONNECTING FIREBASE…'],
+    [80,  'LOADING LEADERBOARD…'],
+    [95,  'ALMOST READY…'],
+    [100, 'LET\'S GOOO! 🐍🔥'],
+  ];
+
+  let i = 0;
+  const next = () => {
+    if (i >= steps.length) {
+      setTimeout(() => {
+        loadGlobalBest();
+        showScreen('start');
+      }, 450);
+      return;
+    }
+    const [pct, msg] = steps[i++];
+    bar.style.width = pct + '%';
+    status.textContent = msg;
+    setTimeout(next, 300 + Math.random() * 280);
   };
-  const move  = () => beep({ freq: 180, type: "sine", duration: 0.02, vol: 0.04, decay: 0.02 });
-  const click = () => beep({ freq: 880, type: "square", duration: 0.04, vol: 0.1 });
+  next();
+}
 
-  return { init, resume, eat, die, levelUp, move, click };
-})();
+async function loadGlobalBest() {
+  const FB = window.NaginiFirebase;
+  if (!FB || !FB.ready()) { $('menuGlobal1').textContent = '—'; return; }
+  try {
+    const best = await FB.fetchGlobalBest();
+    $('menuGlobal1').textContent = best ? best.score : '—';
+  } catch (e) {
+    $('menuGlobal1').textContent = '—';
+  }
+}
 
-// ═══════════════════════════════════════════════════════
-//  RENDERER
-// ═══════════════════════════════════════════════════════
-const Renderer = (() => {
-  const canvas = document.getElementById("gameCanvas");
-  const ctx    = canvas.getContext("2d");
-  let W, H;
+// ── CANVAS SIZING ─────────────────────────────────────────
+const canvas = $('gameCanvas');
+const ctx2d  = canvas.getContext('2d');
 
-  function resize(wrapEl) {
-    const rect = wrapEl.getBoundingClientRect();
-    canvas.width  = GRID_COLS * GRID;
-    canvas.height = GRID_ROWS * GRID;
-    
-    const targetRatio = GRID_COLS / GRID_ROWS;
-    const containerRatio = rect.width / rect.height;
-    
-    let renderW, renderH;
-    if (containerRatio > targetRatio) {
-      renderH = rect.height;
-      renderW = rect.height * targetRatio;
-    } else {
-      renderW = rect.width;
-      renderH = rect.width / targetRatio;
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+
+  // Use getBoundingClientRect for accurate dimensions after CSS layout
+  const rect = wrap.getBoundingClientRect();
+  const availW = Math.floor(rect.width);
+  const availH = Math.floor(rect.height);
+
+  if (availW <= 0 || availH <= 0) return; // layout not ready yet
+
+  // Fit the largest square that is a multiple of GRID
+  const maxSide = Math.min(availW, availH);
+  const size    = Math.floor(maxSide / GRID) * GRID;
+
+  if (size !== canvas.width || size !== canvas.height) {
+    canvas.width  = size;
+    canvas.height = size;
+  }
+
+  if (state.running || state.paused) draw();
+}
+
+// ── GAME INIT ─────────────────────────────────────────────
+function initGame() {
+  clearInterval(state.gameLoop);
+  const cfg = DIFF_CONFIG[state.diff];
+  state.score          = 0;
+  state.level          = 1;
+  state.foodEaten      = 0;
+  state.interval       = cfg.startInterval;
+  state.running        = false;
+  state.paused         = false;
+  state.scoreSubmitted = false;
+  state.particles      = [];
+  state.dir            = { x: 1, y: 0 };
+  state.nextDir        = { x: 1, y: 0 };
+
+  const mid = Math.floor(GRID / 2);
+  state.snake = [
+    { x: mid,     y: mid },
+    { x: mid - 1, y: mid },
+    { x: mid - 2, y: mid },
+  ];
+  placeFood();
+  updateHUD();
+  draw();
+}
+
+function placeFood() {
+  let pos;
+  const occupied = new Set(state.snake.map(s => `${s.x},${s.y}`));
+  do {
+    pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+  } while (occupied.has(`${pos.x},${pos.y}`));
+  state.food = pos;
+}
+
+// ── GAME LOOP ─────────────────────────────────────────────
+function startGameLoop() {
+  state.running = true;
+  state.paused  = false;
+  clearInterval(state.gameLoop);
+  state.gameLoop = setInterval(tick, state.interval);
+}
+
+function pauseGame() {
+  if (!state.running) return;
+  clearInterval(state.gameLoop);
+  state.running = false;
+  state.paused  = true;
+}
+
+function resumeGame() {
+  if (!state.paused) return;
+  state.running = true;
+  state.paused  = false;
+  state.gameLoop = setInterval(tick, state.interval);
+}
+
+function tick() {
+  if (!state.running) return;
+
+  // Apply queued direction
+  state.dir = { ...state.nextDir };
+
+  const head = {
+    x: (state.snake[0].x + state.dir.x + GRID) % GRID,
+    y: (state.snake[0].y + state.dir.y + GRID) % GRID,
+  };
+
+  // Self-collision check
+  if (state.snake.some(s => s.x === head.x && s.y === head.y)) {
+    handleGameOver();
+    return;
+  }
+
+  state.snake.unshift(head);
+
+  const ateFood = state.food && head.x === state.food.x && head.y === state.food.y;
+
+  if (ateFood) {
+    const pts = 10 * state.level * DIFF_CONFIG[state.diff].pointMult;
+    state.score += pts;
+    if (state.score > state.best) state.best = state.score;
+    state.foodEaten++;
+
+    sfxEat();
+    spawnParticles(head.x, head.y);
+    placeFood();
+
+    // Level up every 5 food
+    if (state.foodEaten % 5 === 0) {
+      state.level++;
+      sfxLevel();
+      state.interval = Math.max(MIN_INTERVAL, state.interval - DIFF_CONFIG[state.diff].speedStep);
+      clearInterval(state.gameLoop);
+      state.gameLoop = setInterval(tick, state.interval);
     }
-    
-    canvas.style.width  = renderW + "px";
-    canvas.style.height = renderH + "px";
-    W = canvas.width;
-    H = canvas.height;
+  } else {
+    state.snake.pop();
+    if (state.foodEaten % 4 === 0) sfxTick();
   }
 
-  function clear() {
-    ctx.fillStyle = "#0a0a0f";
-    ctx.fillRect(0, 0, W, H);
-    drawGrid();
-  }
+  updateHUD();
+  updateParticles();
+  draw();
+}
 
-  function drawGrid() {
-    ctx.strokeStyle = "rgba(0,255,180,0.04)";
-    ctx.lineWidth   = 0.5;
-    for (let x = 0; x <= W; x += GRID) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    }
-    for (let y = 0; y <= H; y += GRID) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-  }
-
-  function drawFood(food, tick) {
-    const pulse = 0.8 + 0.2 * Math.sin(tick * 0.15);
-    const cx = food.x * GRID + GRID / 2;
-    const cy = food.y * GRID + GRID / 2;
-    const r  = (GRID / 2 - 2) * pulse;
-
-    // Glow
-    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.5);
-    grd.addColorStop(0, "rgba(255,45,120,0.5)");
-    grd.addColorStop(1, "rgba(255,45,120,0)");
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Core
-    ctx.fillStyle = "#ff2d78";
-    ctx.shadowColor = "#ff2d78";
-    ctx.shadowBlur  = 12;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  }
-
-  function drawSnake(snake, tick) {
-    snake.forEach((seg, i) => {
-      const isHead = i === 0;
-      const t = i / Math.max(snake.length - 1, 1);
-      const alpha = isHead ? 1 : (1 - t * 0.5);
-
-      // Color gradient head → tail
-      const g = Math.floor(200 + 55 * (1 - t));
-      const b = Math.floor(130 * (1 - t));
-      ctx.fillStyle = isHead
-        ? `rgba(0,255,180,${alpha})`
-        : `rgba(0,${g},${b},${alpha})`;
-
-      ctx.shadowColor = isHead ? "#00ffb4" : "#00d48a";
-      ctx.shadowBlur  = isHead ? 12 : 5;
-
-      const pad = isHead ? 1 : 2;
-      roundRect(ctx,
-        seg.x * GRID + pad,
-        seg.y * GRID + pad,
-        GRID - pad * 2,
-        GRID - pad * 2,
-        isHead ? 5 : 3
-      );
-      ctx.fill();
-
-      // Eyes on head
-      if (isHead) drawEyes(seg, snake[1]);
+// ── PARTICLES ─────────────────────────────────────────────
+function spawnParticles(gx, gy) {
+  const cell = canvas.width / GRID;
+  const cx = gx * cell + cell / 2;
+  const cy = gy * cell + cell / 2;
+  for (let i = 0; i < 10; i++) {
+    const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.4;
+    const speed = 1.5 + Math.random() * 2.5;
+    state.particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.06 + Math.random() * 0.04,
+      size: 2 + Math.random() * 3,
+      color: ['#ff2d78', '#ffe600', '#00ff88', '#00e5ff'][Math.floor(Math.random() * 4)],
     });
-    ctx.shadowBlur = 0;
   }
+}
 
-  function drawEyes(head, neck) {
-    // determine direction from neck
-    let dx = 0, dy = 0;
-    if (neck) { dx = head.x - neck.x; dy = head.y - neck.y; }
-    else      { dx = 1; }
+function updateParticles() {
+  state.particles = state.particles
+    .map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - p.decay }))
+    .filter(p => p.life > 0);
+}
 
-    const cx = head.x * GRID + GRID / 2;
-    const cy = head.y * GRID + GRID / 2;
-    const eyeOffset = 4;
-    const eyeR = 2;
+// ── DRAW ──────────────────────────────────────────────────
+const foodPulse = { t: 0 };
 
-    let eye1, eye2;
-    if (dx !== 0) { // horizontal
-      eye1 = { x: cx + dx * 2, y: cy - eyeOffset };
-      eye2 = { x: cx + dx * 2, y: cy + eyeOffset };
-    } else {        // vertical
-      eye1 = { x: cx - eyeOffset, y: cy + dy * 2 };
-      eye2 = { x: cx + eyeOffset, y: cy + dy * 2 };
+function draw() {
+  const c    = ctx2d;
+  const W    = canvas.width;
+  const H    = canvas.height;
+  const cell = W / GRID;
+
+  // Clear entire canvas
+  c.clearRect(0, 0, W, H);
+
+  // ── PLAYABLE AREA: checkerboard so it's clearly distinct ──
+  for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+      const even = (row + col) % 2 === 0;
+      c.fillStyle = even ? '#111228' : '#0f1020';
+      c.fillRect(col * cell, row * cell, cell, cell);
     }
-
-    ctx.fillStyle = "#fff";
-    ctx.shadowBlur = 4; ctx.shadowColor = "#fff";
-    [eye1, eye2].forEach(e => {
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, eyeR, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.shadowBlur = 0;
   }
 
-  function drawFlash(alpha) {
-    ctx.fillStyle = `rgba(255,45,120,${alpha})`;
-    ctx.fillRect(0, 0, W, H);
+  // Grid lines
+  c.strokeStyle = 'rgba(0,255,136,0.07)';
+  c.lineWidth   = 0.5;
+  for (let i = 0; i <= GRID; i++) {
+    c.beginPath(); c.moveTo(i * cell, 0);   c.lineTo(i * cell, H); c.stroke();
+    c.beginPath(); c.moveTo(0, i * cell);   c.lineTo(W, i * cell); c.stroke();
   }
 
-  function roundRect(c, x, y, w, h, r) {
+  // Neon border around playable area
+  c.save();
+  c.strokeStyle = 'rgba(0,255,136,0.5)';
+  c.lineWidth   = 2.5;
+  c.shadowColor = '#00ff88';
+  c.shadowBlur  = 16;
+  c.strokeRect(1.5, 1.5, W - 3, H - 3);
+
+  // Corner accent brackets
+  const ca = cell * 1.2;
+  c.strokeStyle = '#00ff88';
+  c.lineWidth   = 3.5;
+  c.shadowBlur  = 22;
+  // Top-left
+  c.beginPath(); c.moveTo(0, ca); c.lineTo(0, 0); c.lineTo(ca, 0); c.stroke();
+  // Top-right
+  c.beginPath(); c.moveTo(W - ca, 0); c.lineTo(W, 0); c.lineTo(W, ca); c.stroke();
+  // Bottom-left
+  c.beginPath(); c.moveTo(0, H - ca); c.lineTo(0, H); c.lineTo(ca, H); c.stroke();
+  // Bottom-right
+  c.beginPath(); c.moveTo(W - ca, H); c.lineTo(W, H); c.lineTo(W, H - ca); c.stroke();
+  c.shadowBlur = 0;
+  c.restore();
+
+  // Food
+  if (state.food) {
+    foodPulse.t = (foodPulse.t + 0.08) % (Math.PI * 2);
+    const scale = 0.36 + 0.06 * Math.sin(foodPulse.t);
+    const fx = state.food.x * cell + cell / 2;
+    const fy = state.food.y * cell + cell / 2;
+
+    // Outer glow ring
+    const grad = c.createRadialGradient(fx, fy, 0, fx, fy, cell * 0.7);
+    grad.addColorStop(0, 'rgba(255,45,120,0.35)');
+    grad.addColorStop(1, 'rgba(255,45,120,0)');
+    c.fillStyle = grad;
     c.beginPath();
-    c.moveTo(x + r, y);
-    c.lineTo(x + w - r, y);
-    c.quadraticCurveTo(x + w, y, x + w, y + r);
-    c.lineTo(x + w, y + h - r);
-    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    c.lineTo(x + r, y + h);
-    c.quadraticCurveTo(x, y + h, x, y + h - r);
-    c.lineTo(x, y + r);
-    c.quadraticCurveTo(x, y, x + r, y);
-    c.closePath();
+    c.arc(fx, fy, cell * 0.7, 0, Math.PI * 2);
+    c.fill();
+
+    // Apple body
+    c.shadowColor = '#ff2d78';
+    c.shadowBlur  = 14;
+    c.fillStyle   = '#ff2d78';
+    c.beginPath();
+    c.arc(fx, fy, cell * scale, 0, Math.PI * 2);
+    c.fill();
+    c.shadowBlur = 0;
+
+    // Highlight
+    c.fillStyle = 'rgba(255,255,255,0.3)';
+    c.beginPath();
+    c.arc(fx - cell * 0.09, fy - cell * 0.09, cell * 0.1, 0, Math.PI * 2);
+    c.fill();
   }
 
-  return { canvas, ctx, resize, clear, drawGrid, drawFood, drawSnake, drawFlash };
-})();
+  // Snake
+  state.snake.forEach((seg, i) => {
+    const px   = seg.x * cell;
+    const py   = seg.y * cell;
+    const pad  = i === 0 ? 1 : 2;
+    const size = cell - pad * 2;
+    const r    = size * (i === 0 ? 0.44 : 0.38);
 
-// ═══════════════════════════════════════════════════════
-//  INPUT MANAGER
-// ═══════════════════════════════════════════════════════
-const InputManager = (() => {
-  const DIRS = { ArrowUp:"UP", ArrowDown:"DOWN", ArrowLeft:"LEFT", ArrowRight:"RIGHT",
-                 w:"UP", s:"DOWN", a:"LEFT", d:"RIGHT" };
-  let onDir = null;
-  let touchX = 0, touchY = 0;
-
-  function init(onDirection) {
-    onDir = onDirection;
-
-    // Keyboard
-    document.addEventListener("keydown", e => {
-      const dir = DIRS[e.key];
-      if (dir) { e.preventDefault(); onDir(dir); }
-    });
-
-    // Touch swipe on canvas
-    const cvs = Renderer.canvas;
-    cvs.addEventListener("touchstart", e => {
-      e.preventDefault();
-      touchX = e.touches[0].clientX;
-      touchY = e.touches[0].clientY;
-    }, { passive: false });
-
-    cvs.addEventListener("touchmove", e => {
-      e.preventDefault();
-      const dx = e.touches[0].clientX - touchX;
-      const dy = e.touches[0].clientY - touchY;
-      if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
-      if (Math.abs(dx) > Math.abs(dy))
-        onDir(dx > 0 ? "RIGHT" : "LEFT");
-      else
-        onDir(dy > 0 ? "DOWN" : "UP");
-      touchX = e.touches[0].clientX;
-      touchY = e.touches[0].clientY;
-    }, { passive: false });
-
-    // D-pad buttons
-    const map = { btnUp:"UP", btnDown:"DOWN", btnLeft:"LEFT", btnRight:"RIGHT" };
-    Object.entries(map).forEach(([id, dir]) => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      const press = e => {
-        e.preventDefault();
-        btn.classList.add("pressed");
-        AudioEngine.click();
-        onDir(dir);
-        setTimeout(() => btn.classList.remove("pressed"), 120);
-      };
-      btn.addEventListener("touchstart", press, { passive: false });
-      btn.addEventListener("mousedown",  press);
-    });
-  }
-
-  return { init };
-})();
-
-// ═══════════════════════════════════════════════════════
-//  CORE GAME LOGIC
-// ═══════════════════════════════════════════════════════
-const SnakeGame = (() => {
-  // State
-  let snake, dir, nextDir, food, score, length, level, tick;
-  let difficulty, config;
-  let alive, loopId, lastTime, interval;
-  let flashAlpha = 0;
-  let onScoreChange, onLevelChange, onGameOver;
-  let highScore = 0;
-
-  // ── Init ──
-  function start({ diff = "medium", onScore, onLevel, onOver, best = 0 }) {
-    difficulty    = diff;
-    config        = DIFFICULTY[diff];
-    onScoreChange = onScore;
-    onLevelChange = onLevel;
-    onGameOver    = onOver;
-    highScore     = best;
-    interval      = config.interval;
-    reset();
-  }
-
-  function reset() {
-    const midX = Math.floor(GRID_COLS / 2);
-    const midY = Math.floor(GRID_ROWS / 2);
-    snake   = [{ x: midX, y: midY }, { x: midX-1, y: midY }, { x: midX-2, y: midY }];
-    dir     = "RIGHT";
-    nextDir = "RIGHT";
-    food    = spawnFood();
-    score   = 0;
-    length  = snake.length;
-    level   = 1;
-    tick    = 0;
-    alive   = true;
-    flashAlpha = 0;
-    interval = config.interval;
-  }
-
-  function spawnFood() {
-    let pos;
-    do {
-      pos = {
-        x: Math.floor(Math.random() * GRID_COLS),
-        y: Math.floor(Math.random() * GRID_ROWS)
-      };
-    } while (snake.some(s => s.x === pos.x && s.y === pos.y));
-    return pos;
-  }
-
-  // ── Input ──
-  function setDir(d) {
-    const opp = { UP:"DOWN", DOWN:"UP", LEFT:"RIGHT", RIGHT:"LEFT" };
-    if (d !== opp[dir]) nextDir = d;
-  }
-
-  // ── Loop ──
-  function run() {
-    if (!alive) return;
-    lastTime = performance.now();
-    loopId = requestAnimationFrame(frame);
-  }
-
-  function frame(now) {
-    if (!alive) return;
-    loopId = requestAnimationFrame(frame);
-    const delta = now - lastTime;
-    if (delta < interval) {
-      // Still render with animations even between steps
-      renderFrame();
-      return;
-    }
-    lastTime = now;
-    step();
-    renderFrame();
-  }
-
-  function renderFrame() {
-    tick++;
-    Renderer.clear();
-    Renderer.drawFood(food, tick);
-    Renderer.drawSnake(snake, tick);
-    if (flashAlpha > 0) {
-      Renderer.drawFlash(flashAlpha);
-      flashAlpha = Math.max(0, flashAlpha - 0.08);
-    }
-  }
-
-  function step() {
-    dir = nextDir;
-    const head = { x: snake[0].x, y: snake[0].y };
-    switch (dir) {
-      case "UP":    head.y--; break;
-      case "DOWN":  head.y++; break;
-      case "LEFT":  head.x--; break;
-      case "RIGHT": head.x++; break;
-    }
-
-    // Wall collision
-    if (head.x < 0 || head.x >= GRID_COLS ||
-        head.y < 0 || head.y >= GRID_ROWS) {
-      die();
-      return;
-    }
-
-    const ate = (head.x === food.x && head.y === food.y);
-    const collisionSnake = ate ? snake : snake.slice(0, -1);
-    
-    // Self collision
-    if (collisionSnake.some(s => s.x === head.x && s.y === head.y)) {
-      die();
-      return;
-    }
-
-    snake.unshift(head);
-
-    if (ate) {
-      // Ate food
-      score += config.pointsMultiplier;
-      length++;
-      AudioEngine.eat();
-      food = spawnFood();
-      onScoreChange(score, length, level);
-
-      // Level up
-      if (length % LEVEL_EVERY === 0) {
-        level++;
-        interval = Math.max(50, interval - config.speedIncrement);
-        AudioEngine.levelUp();
-        onLevelChange(level);
-      }
+    // Colour — gradient head (bright) to tail (darker)
+    const ratio = i / Math.max(state.snake.length - 1, 1);
+    if (i === 0) {
+      c.shadowColor = '#00ff88';
+      c.shadowBlur  = 14;
+      c.fillStyle   = '#00ff88';
     } else {
-      snake.pop();
-      AudioEngine.move();
+      c.shadowBlur  = 0;
+      const g = Math.round(200 - ratio * 100);
+      const b = Math.round(80  - ratio * 70);
+      c.fillStyle = `rgb(0,${g},${b})`;
     }
-  }
 
-  function die() {
-    alive = false;
-    cancelAnimationFrame(loopId);
-    flashAlpha = 0.6;
-    AudioEngine.die();
-    // one last render to show flash
-    renderFrame();
-    setTimeout(() => {
-      onGameOver({ score, length, level, highScore });
-    }, 700);
-  }
+    drawRoundRect(c, px + pad, py + pad, size, size, r);
+    c.fill();
+    c.shadowBlur = 0;
 
-  function stop() {
-    alive = false;
-    cancelAnimationFrame(loopId);
-  }
-
-  function getState() { return { score, length, level, snake, food, tick }; }
-
-  return { start, reset, setDir, run, stop, getState };
-})();
-
-// ═══════════════════════════════════════════════════════
-//  LEADERBOARD UI
-// ═══════════════════════════════════════════════════════
-const LeaderboardUI = (() => {
-  const list    = document.getElementById("lbList");
-  const tabs    = document.querySelectorAll(".lb-tab");
-  let activeTab = "global";
-  let cache     = { global: null, today: null };
-
-  async function show(tab = "global") {
-    activeTab = tab;
-    updateTabs();
-    list.innerHTML = `<div class="lb-loading">LOADING…</div>`;
-    const scores = await load(tab);
-    render(scores);
-  }
-
-  async function load(tab) {
-    if (cache[tab]) return cache[tab];
-    const data = tab === "today"
-      ? await window.FirebaseAPI.fetchTodayScores(20)
-      : await window.FirebaseAPI.fetchGlobalScores(20);
-    cache[tab] = data;
-    return data;
-  }
-
-  function invalidate() { cache = { global: null, today: null }; }
-
-  function render(scores) {
-    if (!scores || scores.length === 0) {
-      list.innerHTML = `<div class="lb-loading">NO SCORES YET. BE THE FIRST!</div>`;
-      return;
+    // Inner sheen on head
+    if (i === 0) {
+      c.fillStyle = 'rgba(255,255,255,0.12)';
+      drawRoundRect(c, px + pad + 2, py + pad + 2, size * 0.5, size * 0.35, r * 0.5);
+      c.fill();
+      drawEyes(c, seg, cell);
     }
-    list.innerHTML = "";
-    scores.forEach((entry, i) => {
-      const el  = document.createElement("div");
-      el.className = "lb-entry";
-      el.style.animationDelay = `${i * 40}ms`;
+  });
 
-      const rankClass = i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "other";
-      const rankLabel = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i+1}`;
-      const diff = (entry.difficulty || "easy").toLowerCase();
+  // Particles
+  state.particles.forEach(p => {
+    c.globalAlpha = p.life;
+    c.fillStyle   = p.color;
+    c.beginPath();
+    c.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    c.fill();
+  });
+  c.globalAlpha = 1;
 
-      el.innerHTML = `
-        <span class="lb-rank ${rankClass}">${rankLabel}</span>
-        <span class="lb-name">${esc(entry.name || "ANON")}</span>
-        <span class="lb-diff-badge ${diff}">${diff.toUpperCase()}</span>
-        <span class="lb-score">${entry.score}</span>
-      `;
-      list.appendChild(el);
-    });
+  // Paused overlay
+  if (state.paused) {
+    c.fillStyle = 'rgba(0,0,0,0.55)';
+    c.fillRect(0, 0, W, H);
+    c.fillStyle  = '#00ff88';
+    c.font       = `bold ${cell * 2.5}px 'Teko', sans-serif`;
+    c.textAlign  = 'center';
+    c.textBaseline = 'middle';
+    c.shadowColor = '#00ff88';
+    c.shadowBlur  = 20;
+    c.fillText('PAUSED', W / 2, H / 2);
+    c.shadowBlur = 0;
+    c.font = `${cell * 0.85}px 'Share Tech Mono', monospace`;
+    c.fillStyle = 'rgba(255,255,255,0.4)';
+    c.fillText('TAP TO RESUME', W / 2, H / 2 + cell * 2.2);
+    c.textAlign = 'left';
+    c.textBaseline = 'alphabetic';
   }
+}
 
-  function updateTabs() {
-    tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === activeTab));
-  }
+function drawRoundRect(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y);
+  c.quadraticCurveTo(x + w, y,     x + w, y + r);
+  c.lineTo(x + w, y + h - r);
+  c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  c.lineTo(x + r, y + h);
+  c.quadraticCurveTo(x, y + h,     x, y + h - r);
+  c.lineTo(x, y + r);
+  c.quadraticCurveTo(x, y,         x + r, y);
+  c.closePath();
+}
 
-  function esc(str) {
-    return str.replace(/[&<>"']/g, c =>
-      ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-  }
+function drawEyes(c, seg, cell) {
+  const cx   = seg.x * cell + cell / 2;
+  const cy   = seg.y * cell + cell / 2;
+  const dx   = state.dir.x;
+  const dy   = state.dir.y;
+  const px   = -dy;
+  const py   =  dx;
+  const off  = cell * 0.17;
+  const fwd  = cell * 0.11;
+  const er   = cell * 0.095;
 
-  // Tab clicks
-  tabs.forEach(t => t.addEventListener("click", () => {
-    activeTab = t.dataset.tab;
-    show(activeTab);
-  }));
+  [[1], [-1]].forEach(([s]) => {
+    const ex = cx + px * off * s + dx * fwd;
+    const ey = cy + py * off * s + dy * fwd;
 
-  return { show, invalidate };
-})();
+    c.fillStyle = '#fff';
+    c.beginPath();
+    c.arc(ex, ey, er, 0, Math.PI * 2);
+    c.fill();
 
-// ═══════════════════════════════════════════════════════
-//  UI CONTROLLER
-// ═══════════════════════════════════════════════════════
-const UIController = (() => {
-  const screens = {
-    loading:     document.getElementById("loadingScreen"),
-    start:       document.getElementById("startScreen"),
-    game:        document.getElementById("gameScreen"),
-    gameOver:    document.getElementById("gameOverScreen"),
-    leaderboard: document.getElementById("leaderboardScreen"),
-  };
-
-  const hudScore  = document.getElementById("hudScore");
-  const hudBest   = document.getElementById("hudBest");
-  const hudLevel  = document.getElementById("hudLevel");
-
-  let current = "loading";
-
-  function show(name) {
-    Object.entries(screens).forEach(([k, el]) => {
-      el.classList.toggle("active", k === name);
-    });
-    current = name;
-  }
-
-  function updateHUD(score, length, level) {
-    hudScore.textContent = score;
-    hudLevel.textContent = level;
-  }
-
-  function updateHUDBest(best) {
-    hudBest.textContent = best;
-  }
-
-  return { show, updateHUD, updateHUDBest };
-})();
-
-// ═══════════════════════════════════════════════════════
-//  APP — BOOTSTRAP & COORDINATION
-// ═══════════════════════════════════════════════════════
-const App = (() => {
-  // Persistent storage
-  const LS = {
-    get best()   { return parseInt(localStorage.getItem("neon_best") || "0"); },
-    set best(v)  { localStorage.setItem("neon_best", v); },
-    get name()   { return localStorage.getItem("neon_name") || ""; },
-    set name(v)  { localStorage.setItem("neon_name", v); },
-    get diff()   { return localStorage.getItem("neon_diff") || "medium"; },
-    set diff(v)  { localStorage.setItem("neon_diff", v); },
-  };
-
-  let selectedDiff = LS.diff;
-  let pendingResult = null;   // game-over data waiting for leaderboard submit
-
-  // DOM refs
-  const startBtn        = document.getElementById("startBtn");
-  const leaderboardBtn  = document.getElementById("leaderboardBtn");
-  const restartBtn      = document.getElementById("restartBtn");
-  const goLeaderboardBtn= document.getElementById("goLeaderboardBtn");
-  const goHomeBtn       = document.getElementById("goHomeBtn");
-  const lbBackBtn       = document.getElementById("lbBackBtn");
-  const lbPlayBtn       = document.getElementById("lbPlayBtn");
-  const submitScoreBtn  = document.getElementById("submitScoreBtn");
-  const playerNameInput = document.getElementById("playerName");
-  const diffBtns        = document.querySelectorAll(".diff-btn");
-  const menuBest        = document.getElementById("menuBest");
-  const menuGlobal      = document.getElementById("menuGlobal");
-  const goScore         = document.getElementById("goScore");
-  const goBest          = document.getElementById("goBest");
-  const goLength        = document.getElementById("goLength");
-  const goLevel         = document.getElementById("goLevel");
-  const newRecordBadge  = document.getElementById("newRecordBadge");
-  const nameEntry       = document.getElementById("nameEntry");
-  const loadBar         = document.getElementById("loadBar");
-  const loadStatus      = document.getElementById("loadStatus");
-  const countdownOverlay= document.getElementById("countdownOverlay");
-  const countdownNum    = document.getElementById("countdownNum");
-  const canvasWrap      = document.querySelector(".canvas-wrap");
-
-  // ── INIT ──
-  async function init() {
-    AudioEngine.init();
-
-    // Loading animation
-    await fakeLoad();
-
-    // Setup canvas size
-    Renderer.resize(canvasWrap);
-    window.addEventListener("resize", () => Renderer.resize(canvasWrap));
-
-    // Wire difficulty buttons
-    diffBtns.forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.diff === selectedDiff);
-      btn.addEventListener("click", () => {
-        selectedDiff = btn.dataset.diff;
-        LS.diff = selectedDiff;
-        diffBtns.forEach(b => b.classList.toggle("active", b.dataset.diff === selectedDiff));
-        AudioEngine.click();
-      });
-    });
-
-    // Wire navigation
-    startBtn.addEventListener("click",         () => { AudioEngine.resume(); AudioEngine.click(); startGame(); });
-    leaderboardBtn.addEventListener("click",   () => { AudioEngine.resume(); AudioEngine.click(); showLeaderboard("start"); });
-    restartBtn.addEventListener("click",       () => { AudioEngine.resume(); AudioEngine.click(); startGame(); });
-    goLeaderboardBtn.addEventListener("click", () => { AudioEngine.resume(); AudioEngine.click(); showLeaderboard("gameOver"); });
-    goHomeBtn.addEventListener("click",        () => { AudioEngine.resume(); AudioEngine.click(); SnakeGame.stop(); UIController.show("start"); });
-    lbBackBtn.addEventListener("click",        () => { AudioEngine.resume(); AudioEngine.click(); UIController.show(lbBackBtn._from || "start"); });
-    lbPlayBtn.addEventListener("click",        () => { AudioEngine.resume(); AudioEngine.click(); startGame(); });
-    submitScoreBtn.addEventListener("click",   () => submitLeaderboard());
-    playerNameInput.addEventListener("keydown", e => { if (e.key === "Enter") submitLeaderboard(); });
-
-    // Input
-    InputManager.init(dir => SnakeGame.setDir(dir));
-
-    // Update start screen
-    menuBest.textContent = LS.best || "0";
-    
-    // Load global top score asynchronously so it doesn't block startup
-    window.FirebaseAPI.ready.then(async () => {
-      const topScore = await window.FirebaseAPI.fetchTopScore();
-      menuGlobal.textContent = topScore || "—";
-    });
-
-    // Pre-fill name
-    if (LS.name) playerNameInput.value = LS.name;
-
-    UIController.show("start");
-  }
-
-  // ── LOADING ──
-  async function fakeLoad() {
-    const steps = [
-      [10, "LOADING ASSETS…"],
-      [30, "WIRING AUDIO…"],
-      [55, "CONNECTING SERVERS…"],
-      [75, "SYNCING LEADERBOARD…"],
-      [90, "CALIBRATING NEON…"],
-      [100,"READY!"]
-    ];
-    for (const [pct, msg] of steps) {
-      loadBar.style.width = pct + "%";
-      loadStatus.textContent = msg;
-      await sleep(15 + Math.random() * 20);
-    }
-    await sleep(50);
-  }
-
-  // ── START GAME ──
-  function startGame() {
-    pendingResult = null;
-    UIController.show("game");
-    UIController.updateHUDBest(LS.best);
-    countdown(3, () => {
-      SnakeGame.start({
-        diff:    selectedDiff,
-        best:    LS.best,
-        onScore: (score, length, level) => {
-          UIController.updateHUD(score, length, level);
-          if (score > LS.best) {
-            LS.best = score;
-            UIController.updateHUDBest(score);
-          }
-        },
-        onLevel: level => {
-          // Level-up flash in HUD handled by game
-        },
-        onOver: result => showGameOver(result),
-      });
-      SnakeGame.run();
-    });
-  }
-
-  // ── COUNTDOWN ──
-  function countdown(from, cb) {
-    countdownOverlay.classList.remove("hidden");
-    let n = from;
-    countdownNum.textContent = n;
-
-    const tick = () => {
-      n--;
-      if (n <= 0) {
-        countdownOverlay.classList.add("hidden");
-        cb();
-        return;
-      }
-      countdownNum.style.animation = "none";
-      void countdownNum.offsetWidth; // reflow
-      countdownNum.style.animation = "";
-      countdownNum.textContent = n;
-      setTimeout(tick, 900);
-    };
-    setTimeout(tick, 900);
-  }
-
-  // ── GAME OVER ──
-  function showGameOver(result) {
-    pendingResult = result;
-    const isNewRecord = result.score > 0 && result.score >= result.highScore && result.score === LS.best;
-
-    goScore.textContent  = result.score;
-    goBest.textContent   = LS.best;
-    goLength.textContent = result.length;
-    goLevel.textContent  = result.level;
-    newRecordBadge.classList.toggle("hidden", !isNewRecord);
-    nameEntry.style.display = result.score > 0 ? "flex" : "none";
-
-    UIController.show("gameOver");
-  }
-
-  // ── SUBMIT SCORE ──
-  async function submitLeaderboard() {
-    if (!pendingResult || pendingResult.score <= 0) return;
-    const name = (playerNameInput.value.trim() || "ANON").toUpperCase().slice(0, 12);
-    LS.name = name;
-    submitScoreBtn.textContent = "SUBMITTING…";
-    submitScoreBtn.disabled = true;
-
-    await window.FirebaseAPI.submitScore({
-      name,
-      score:      pendingResult.score,
-      difficulty: selectedDiff,
-      length:     pendingResult.length,
-      level:      pendingResult.level,
-    });
-
-    LeaderboardUI.invalidate();
-    submitScoreBtn.textContent = "✓ SUBMITTED!";
-    nameEntry.style.display = "none";
-    pendingResult = null;
-
-    // Update global #1 on start screen
-    window.FirebaseAPI.fetchTopScore().then(s => { menuGlobal.textContent = s || "—"; });
-  }
-
-  // ── LEADERBOARD ──
-  function showLeaderboard(from = "start") {
-    lbBackBtn._from = from;
-    UIController.show("leaderboard");
-    LeaderboardUI.show("global");
-  }
-
-  // ── HELPERS ──
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  return { init };
-})();
-
-// ── BOOT ──
-document.addEventListener("DOMContentLoaded", () => App.init());
-
-// ── SERVICE WORKER REGISTRATION ──
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js")
-      .then(() => console.log("[SW] Registered ✓"))
-      .catch(e => console.warn("[SW] Registration failed:", e));
+    c.fillStyle = '#111';
+    c.beginPath();
+    c.arc(ex + dx * er * 0.38, ey + dy * er * 0.38, er * 0.52, 0, Math.PI * 2);
+    c.fill();
   });
 }
+
+// ── HUD ───────────────────────────────────────────────────
+function updateHUD() {
+  $('hudScore').textContent = state.score;
+  $('hudLevel').textContent = state.level;
+  $('hudBest').textContent  = state.best;
+}
+
+// ── COUNTDOWN ─────────────────────────────────────────────
+function startCountdown(onDone) {
+  const overlay  = $('countdownOverlay');
+  const numEl    = $('countdownNum');
+  let count = 3;
+
+  overlay.classList.remove('hidden');
+  numEl.textContent = count;
+  sfxCount();
+
+  const iv = setInterval(() => {
+    count--;
+    if (count <= 0) {
+      clearInterval(iv);
+      overlay.classList.add('hidden');
+      onDone();
+    } else {
+      numEl.textContent = count;
+      // Restart animation
+      numEl.style.animation = 'none';
+      numEl.offsetHeight;
+      numEl.style.animation = 'pop 0.4s ease-out';
+      sfxCount();
+    }
+  }, 950);
+}
+
+// ── GAME OVER ─────────────────────────────────────────────
+function handleGameOver() {
+  clearInterval(state.gameLoop);
+  state.running = false;
+  state.paused  = false;
+  sfxDie();
+
+  // Persist local best
+  const saved = parseInt(localStorage.getItem('nagini_best') || '0', 10);
+  if (state.score > saved) localStorage.setItem('nagini_best', String(state.score));
+  if (state.score > state.best) state.best = state.score;
+
+  // Red flash
+  canvas.style.transition = 'none';
+  canvas.style.boxShadow  = '0 0 0 4px #ff2d78, 0 0 40px #ff2d78';
+  setTimeout(() => { canvas.style.boxShadow = ''; canvas.style.transition = ''; }, 500);
+
+  // Random Tamil quote
+  $('tamilQuote').textContent = TAMIL_QUOTES[Math.floor(Math.random() * TAMIL_QUOTES.length)];
+
+  // Scores
+  $('goScore').textContent  = state.score;
+  $('goBest').textContent   = state.best;
+  $('goLength').textContent = state.snake.length;
+  $('goLevel').textContent  = state.level;
+
+  // New record badge — only if beaten a real score
+  const prevBest = parseInt(localStorage.getItem('nagini_best') || '0', 10);
+  const isNewRecord = state.score > 0 && state.score >= prevBest && state.snake.length > 3;
+  $('newRecordBadge').classList.toggle('hidden', !isNewRecord);
+
+  // Name entry: only show if Firebase ready and scored something
+  const FB   = window.NaginiFirebase;
+  const showEntry = FB && FB.ready() && state.score > 0 && !state.scoreSubmitted;
+  $('nameEntry').style.display = showEntry ? 'flex' : 'none';
+  if (showEntry) {
+    $('playerName').value = '';
+    $('submitScoreBtn').textContent = '📤 SUBMIT SCORE';
+    $('submitScoreBtn').disabled    = false;
+    setTimeout(() => $('playerName').focus(), 400);
+  }
+
+  showScreen('gameover');
+}
+
+// ── SCORE SUBMIT ──────────────────────────────────────────
+async function handleSubmitScore() {
+  if (state.scoreSubmitted) return;
+  const name = ($('playerName').value || '').trim() || 'PLAYER_1';
+  const btn  = $('submitScoreBtn');
+  btn.textContent = '⏳ SUBMITTING…';
+  btn.disabled    = true;
+
+  const FB = window.NaginiFirebase;
+  if (!FB || !FB.ready()) {
+    btn.textContent = '❌ FIREBASE NOT CONFIGURED';
+    return;
+  }
+
+  const ok = await FB.submitScore(name, state.score, state.diff);
+  state.scoreSubmitted = true;
+  if (ok) {
+    btn.textContent = '✅ SCORE SAVED!';
+    $('nameEntry').style.display = 'none';
+    loadGlobalBest(); // refresh #1 on start screen
+  } else {
+    btn.textContent = '❌ ERROR — TRY AGAIN';
+    btn.disabled    = false;
+    state.scoreSubmitted = false;
+  }
+}
+
+// ── LEADERBOARD ───────────────────────────────────────────
+let lbCurrentTab   = 'global';
+let lbPreviousScr  = 'start';
+
+async function openLeaderboard(fromScreen) {
+  lbPreviousScr = fromScreen || 'start';
+  lbCurrentTab  = 'global';
+  document.querySelectorAll('.lb-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'global'));
+  showScreen('leaderboard');
+  await renderLeaderboard('global');
+}
+
+async function renderLeaderboard(tab) {
+  const list = $('lbList');
+  list.innerHTML = '<div class="lb-loading">LOADING… 🐍</div>';
+
+  const FB = window.NaginiFirebase;
+  if (!FB || !FB.ready()) {
+    list.innerHTML = `
+      <div class="lb-empty">
+        <span class="lb-empty-icon">🔌</span>
+        <p>Firebase not connected.</p>
+        <p>Add your config to <strong>firebase.js</strong> to enable the leaderboard.</p>
+        <p class="lb-empty-tamil">firebase.js-ல config போடுங்க — leaderboard ready! 🐍</p>
+      </div>`;
+    return;
+  }
+
+  try {
+    const scores = tab === 'today'
+      ? await FB.fetchTodayScores()
+      : await FB.fetchGlobalScores();
+
+    if (!scores || scores.length === 0) {
+      list.innerHTML = `
+        <div class="lb-empty">
+          <span class="lb-empty-icon">🏆</span>
+          <p>${tab === 'today' ? 'No scores today yet!' : 'No scores yet!'}</p>
+          <p>Be the first to play and claim the top spot!</p>
+          <p class="lb-empty-tamil">முதல்ல நீயே ஆடு! முதலிடம் உனக்காக காத்திருக்கு 🐍</p>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = scores.map((entry, i) => {
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+      const rankCls = i < 3 ? `lb-rank-${i + 1}` : 'lb-rank-n';
+      const diff    = entry.difficulty || 'easy';
+      return `
+        <div class="lb-row">
+          <span class="lb-rank ${rankCls}">${medal}</span>
+          <span class="lb-name">${escHtml(entry.name || 'UNKNOWN')}</span>
+          <span class="lb-diff-badge lb-diff-${diff}">${diff.toUpperCase()}</span>
+          <span class="lb-score">${Number(entry.score).toLocaleString()}</span>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="lb-empty"><p>⚠️ Error loading scores. Please try again!</p></div>`;
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+// ── INPUT: KEYBOARD ───────────────────────────────────────
+const KEY_MAP = {
+  ArrowUp: 'up', w: 'up', W: 'up',
+  ArrowDown: 'down', s: 'down', S: 'down',
+  ArrowLeft: 'left', a: 'left', A: 'left',
+  ArrowRight: 'right', d: 'right', D: 'right',
+};
+const DIR_VEC = {
+  up:    { x:  0, y: -1 },
+  down:  { x:  0, y:  1 },
+  left:  { x: -1, y:  0 },
+  right: { x:  1, y:  0 },
+};
+
+function trySetDir(d) {
+  const nd = DIR_VEC[d];
+  if (!nd) return;
+  // Prevent 180-degree reversal
+  if (nd.x === -state.dir.x && nd.y === -state.dir.y) return;
+  state.nextDir = nd;
+}
+
+document.addEventListener('keydown', e => {
+  if (state.screen !== 'game') return;
+  const d = KEY_MAP[e.key];
+  if (d) { e.preventDefault(); trySetDir(d); return; }
+  if (e.key === ' ' || e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    e.preventDefault();
+    if (state.running)     pauseGame();
+    else if (state.paused) resumeGame();
+  }
+});
+
+// ── INPUT: D-PAD BUTTONS ──────────────────────────────────
+['Up', 'Down', 'Left', 'Right'].forEach(dir => {
+  const btn = $('btn' + dir);
+  if (!btn) return;
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    trySetDir(dir.toLowerCase());
+  });
+});
+
+// ── INPUT: TOUCH SWIPE ON CANVAS ─────────────────────────
+let touchStart = null;
+
+canvas.addEventListener('touchstart', e => {
+  if (state.screen !== 'game') return;
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+
+canvas.addEventListener('touchend', e => {
+  if (state.screen !== 'game' || !touchStart) return;
+  const dx   = e.changedTouches[0].clientX - touchStart.x;
+  const dy   = e.changedTouches[0].clientY - touchStart.y;
+  const adx  = Math.abs(dx);
+  const ady  = Math.abs(dy);
+  touchStart = null;
+  if (Math.max(adx, ady) < 18) {
+    // Tap — pause/resume
+    if (state.running) pauseGame();
+    else if (state.paused) resumeGame();
+    return;
+  }
+  if (adx > ady) trySetDir(dx > 0 ? 'right' : 'left');
+  else           trySetDir(dy > 0 ? 'down'  : 'up');
+}, { passive: true });
+
+// Prevent rubber-band scroll when playing
+document.addEventListener('touchmove', e => {
+  if (state.screen === 'game') e.preventDefault();
+}, { passive: false });
+
+// ── BUTTON WIRING ─────────────────────────────────────────
+function startNewGame() {
+  initGame();
+  showScreen('game');
+  // Wait one frame for CSS layout to settle before measuring
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      resizeCanvas();
+      startCountdown(startGameLoop);
+    });
+  });
+}
+
+$('startBtn').addEventListener('click', startNewGame);
+$('restartBtn').addEventListener('click', startNewGame);
+$('lbPlayBtn').addEventListener('click', startNewGame);
+
+$('leaderboardBtn').addEventListener('click',   () => openLeaderboard('start'));
+$('goLeaderboardBtn').addEventListener('click', () => openLeaderboard('gameover'));
+
+$('goHomeBtn').addEventListener('click', () => {
+  clearInterval(state.gameLoop);
+  state.running = false;
+  state.paused  = false;
+  loadGlobalBest();
+  showScreen('start');
+});
+
+$('lbBackBtn').addEventListener('click', () => showScreen(lbPreviousScr));
+
+$('submitScoreBtn').addEventListener('click', handleSubmitScore);
+$('playerName').addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmitScore(); });
+
+// Difficulty buttons
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.diff = btn.dataset.diff;
+  });
+});
+
+// Leaderboard tabs
+document.querySelectorAll('.lb-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    lbCurrentTab = tab.dataset.tab;
+    renderLeaderboard(lbCurrentTab);
+  });
+});
+
+// Resize — debounced with rAF
+let resizeRaf = null;
+window.addEventListener('resize', () => {
+  if (state.screen !== 'game') return;
+  if (resizeRaf) cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = requestAnimationFrame(resizeCanvas);
+  });
+});
+
+// ── BOOT ──────────────────────────────────────────────────
+// Restore local best
+state.best = parseInt(localStorage.getItem('nagini_best') || '0', 10);
+
+// Boot sequence
+showScreen('loading');
+runLoading();

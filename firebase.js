@@ -1,253 +1,109 @@
-# Complete Firebase Leaderboard JavaScript
+// ══════════════════════════════════════════
+//  NAMA NAGINI — firebase.js
+//  Leaderboard: Firestore only (no fake data)
+// ══════════════════════════════════════════
 
-```javascript
-// ===============================
-// FIREBASE IMPORTS
-// ===============================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-// ===============================
-// FIREBASE CONFIG
-// ===============================
+// ⚠️  REPLACE WITH YOUR OWN FIREBASE CONFIG
+// Go to https://console.firebase.google.com
+// → Your project → Project Settings → Web App
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "XXXXXXXX",
-  appId: "YOUR_APP_ID"
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
 };
 
-// ===============================
-// INITIALIZE FIREBASE
-// ===============================
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// ── INIT ────────────────────────────────────
+let db = null;
+let firebaseReady = false;
 
-// ===============================
-// TODAY DATE KEY
-// ===============================
-function todayKey() {
-  const d = new Date();
-
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
+try {
+  if (typeof firebase !== 'undefined') {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firebaseReady = true;
+    console.log('[Firebase] Connected ✅');
+  }
+} catch (e) {
+  console.warn('[Firebase] Init failed — offline mode:', e.message);
 }
 
-// ===============================
-// SAVE SCORE
-// ===============================
-async function saveScore(playerName, playerScore) {
+// ── SUBMIT SCORE ─────────────────────────────
+async function submitScore(name, score, difficulty) {
+  if (!firebaseReady || !db) {
+    console.warn('[Firebase] Not connected — score not saved');
+    return false;
+  }
   try {
-
-    // BASIC VALIDATION
-    if (!playerName || playerName.trim() === '') {
-      alert('Enter player name');
-      return;
-    }
-
-    if (playerScore < 0) {
-      return;
-    }
-
-    // LIMIT SCORE
-    if (playerScore > 500) {
-      console.log('Fake score blocked');
-      return;
-    }
-
-    // SAVE TO FIRESTORE
-    await addDoc(collection(db, 'scores'), {
-      name: playerName.trim().substring(0, 10).toUpperCase(),
-      score: Number(playerScore),
-      dateKey: todayKey(),
-      createdAt: serverTimestamp()
+    await db.collection('scores').add({
+      name:       name.toUpperCase().trim().slice(0, 12),
+      score:      Number(score),
+      difficulty: difficulty,
+      timestamp:  firebase.firestore.FieldValue.serverTimestamp(),
+      date:       new Date().toISOString().split('T')[0]   // YYYY-MM-DD
     });
-
-    console.log('Score saved successfully');
-
-    // REFRESH LEADERBOARD
-    loadLeaderboard();
-
-  } catch (error) {
-    console.error('Error saving score:', error);
+    console.log('[Firebase] Score submitted ✅');
+    return true;
+  } catch (e) {
+    console.error('[Firebase] Submit error:', e);
+    return false;
   }
 }
 
-// ===============================
-// LOAD LEADERBOARD
-// ===============================
-async function loadLeaderboard() {
-
+// ── FETCH GLOBAL TOP 20 ───────────────────────
+async function fetchGlobalScores() {
+  if (!firebaseReady || !db) return [];
   try {
-
-    const leaderboardBody = document.getElementById('leaderboardBody');
-
-    if (!leaderboardBody) {
-      return;
-    }
-
-    leaderboardBody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
-
-    // FIRESTORE QUERY
-    const q = query(
-      collection(db, 'scores'),
-      where('dateKey', '==', todayKey()),
-      orderBy('score', 'desc'),
-      limit(10)
-    );
-
-    const querySnapshot = await getDocs(q);
-
-    leaderboardBody.innerHTML = '';
-
-    // NO DATA
-    if (querySnapshot.empty) {
-      leaderboardBody.innerHTML = `
-        <tr>
-          <td colspan="3">No scores today</td>
-        </tr>
-      `;
-      return;
-    }
-
-    let rank = 1;
-
-    querySnapshot.forEach((doc) => {
-
-      const data = doc.data();
-
-      const row = document.createElement('tr');
-
-      row.innerHTML = `
-        <td>#${rank}</td>
-        <td>${data.name}</td>
-        <td>${data.score}</td>
-      `;
-
-      leaderboardBody.appendChild(row);
-
-      rank++;
-    });
-
-  } catch (error) {
-
-    console.error('Leaderboard error:', error);
-
-    const leaderboardBody = document.getElementById('leaderboardBody');
-
-    if (leaderboardBody) {
-      leaderboardBody.innerHTML = `
-        <tr>
-          <td colspan="3">Leaderboard failed</td>
-        </tr>
-      `;
-    }
+    const snap = await db.collection('scores')
+      .orderBy('score', 'desc')
+      .limit(20)
+      .get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error('[Firebase] Fetch global error:', e);
+    return [];
   }
 }
 
-// ===============================
-// GAME OVER FUNCTION
-// ===============================
-async function gameOver(finalScore) {
-
-  const playerName = prompt('Enter Your Name');
-
-  if (!playerName) {
-    return;
-  }
-
-  await saveScore(playerName, finalScore);
-}
-
-// ===============================
-// AUTO LOAD LEADERBOARD
-// ===============================
-window.addEventListener('DOMContentLoaded', () => {
-  loadLeaderboard();
-});
-
-// ===============================
-// EXAMPLE BUTTON
-// ===============================
-const testButton = document.getElementById('testSubmit');
-
-if (testButton) {
-
-  testButton.addEventListener('click', () => {
-    saveScore('TEST', Math.floor(Math.random() * 100));
-  });
-}
-```
-
----
-
-# HTML TABLE REQUIRED
-
-```html
-<table>
-  <thead>
-    <tr>
-      <th>Rank</th>
-      <th>Name</th>
-      <th>Score</th>
-    </tr>
-  </thead>
-
-  <tbody id="leaderboardBody">
-  </tbody>
-</table>
-```
-
----
-
-# FIRESTORE RULES
-
-```txt
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    match /scores/{document} {
-      allow read: if true;
-
-      allow create: if
-        request.resource.data.name is string &&
-        request.resource.data.score is number &&
-        request.resource.data.score <= 500;
-    }
+// ── FETCH TODAY'S TOP 20 ──────────────────────
+async function fetchTodayScores() {
+  if (!firebaseReady || !db) return [];
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const snap = await db.collection('scores')
+      .where('date', '==', today)
+      .orderBy('score', 'desc')
+      .limit(20)
+      .get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error('[Firebase] Fetch today error:', e);
+    return [];
   }
 }
-```
 
----
+// ── FETCH GLOBAL #1 ───────────────────────────
+async function fetchGlobalBest() {
+  if (!firebaseReady || !db) return null;
+  try {
+    const snap = await db.collection('scores')
+      .orderBy('score', 'desc')
+      .limit(1)
+      .get();
+    if (snap.empty) return null;
+    return snap.docs[0].data();
+  } catch (e) {
+    return null;
+  }
+}
 
-# REQUIRED COMPOSITE INDEX
-
-Collection:
-
-```txt
-scores
-```
-
-Fields:
-
-```txt
-dateKey    Ascending
-score      Descending
-```
+// Expose globally
+window.NaginiFirebase = {
+  ready: () => firebaseReady,
+  submitScore,
+  fetchGlobalScores,
+  fetchTodayScores,
+  fetchGlobalBest,
+};
