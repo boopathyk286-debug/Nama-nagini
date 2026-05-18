@@ -582,6 +582,9 @@ async function handleSubmitScore() {
   const nameInput = $('playerName');
   const name = (nameInput ? nameInput.value : '').trim() || 'PLAYER_1';
   const btn = $('submitScoreBtn');
+  
+  console.log("🎮 Submitting score:", name, state.score, state.diff);
+  
   if (btn) {
     btn.textContent = '⏳ SUBMITTING…';
     btn.disabled = true;
@@ -589,11 +592,23 @@ async function handleSubmitScore() {
 
   const FB = window.NaginiFirebase;
   if (!FB || !FB.ready()) {
+    console.error("Firebase not ready!");
     if (btn) btn.textContent = '❌ FIREBASE NOT CONFIGURED';
     return;
   }
 
+  // Test connection first
+  if (FB.testConnection) {
+    const isConnected = await FB.testConnection();
+    if (!isConnected) {
+      if (btn) btn.textContent = '❌ FIREBASE ERROR - Check console';
+      return;
+    }
+  }
+
   const ok = await FB.submitScore(name, state.score, state.diff);
+  console.log("Submit result:", ok);
+  
   state.scoreSubmitted = true;
   if (ok) {
     if (btn) btn.textContent = '✅ SCORE SAVED!';
@@ -608,9 +623,6 @@ async function handleSubmitScore() {
     state.scoreSubmitted = false;
   }
 }
-
-let lbCurrentTab = 'global';
-let lbPreviousScr = 'start';
 
 async function openLeaderboard(fromScreen) {
   lbPreviousScr = fromScreen || 'start';
