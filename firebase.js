@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAuE95hSCbvKPG2eq3ICTanW3dPxYvsXag",
@@ -14,30 +14,9 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const leaderboardRef = collection(db, "leaderboard");
 
-// Test Firebase connection
-console.log("🔥 Firebase initializing...");
+console.log("🔥 Firebase initialized successfully!");
 console.log("Project ID:", firebaseConfig.projectId);
-
-// Direct test function
-async function testFirebaseConnection() {
-  try {
-    console.log("Testing Firebase connection...");
-    const testDoc = await addDoc(leaderboardRef, {
-      name: "TEST",
-      score: 999,
-      difficulty: "easy",
-      created: Date.now()
-    });
-    console.log("✅ Firebase WORKING! Test doc ID:", testDoc.id);
-    return true;
-  } catch (err) {
-    console.error("❌ Firebase FAILED:", err);
-    console.error("Error details:", err.message);
-    return false;
-  }
-}
 
 let leaderboardAPI = null;
 
@@ -51,8 +30,6 @@ async function getLeaderboard() {
 
 window.NaginiFirebase = {
   ready: () => true,
-  
-  testConnection: testFirebaseConnection,
   
   submitScore: async (name, score, difficulty) => {
     console.log("📤 Submitting score:", { name, score, difficulty });
@@ -98,9 +75,8 @@ window.NaginiFirebase = {
   }
 };
 
-// Run test on load
-setTimeout(() => {
-  testFirebaseConnection();
-}, 2000);
+// ✅ REMOVED: testFirebaseConnection function
+// ✅ REMOVED: setTimeout that was adding TEST 999 scores
+// ✅ No automatic test scores will be added on page load
 
-export { db, leaderboardRef };
+export { db };
